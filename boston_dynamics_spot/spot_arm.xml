@@ -87,7 +87,7 @@
 
   <worldbody>
     <light name="spotlight" mode="targetbodycom" target="body" pos="3 0 4" cutoff="30"/>
-    <body name="body" childclass="spot" pos="3 -3 0.75">
+    <body name="body" childclass="spot" pos="12.5 -2.5 0.75" euler="0 0 1.5708">
       <camera name="main" pos="0.4 0 0" mode="fixed" fovy="90" euler="0 -1.5708 0"/>
       <light name="tracking" mode="trackcom" pos="0 0 2"/>
       <freejoint name="freejoint"/>

@@ -13,7 +13,7 @@ env_path = os.path.join(parent_path, 'boston_dynamics_spot', 'scene_arm.xml')
 try:
     model = mu.MjModel.from_xml_path(env_path)
     data = mu.MjData(model)
-    renderer = mu.Renderer(model)
+    renderer = mu.Renderer(model, height=480, width=640)
     print("MuJoCo environment loaded successfully.")
 except Exception as e:
     print(f"Error loading MuJoCo environment: {e}")
@@ -26,7 +26,6 @@ with m.launch_passive(model, data) as viewer:
     while viewer.is_running():
         step_time = time.time()
 
-        # Simulate one step
         mu.mj_step(model, data)
         viewer.sync()
 

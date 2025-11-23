@@ -3,6 +3,8 @@ import mujoco as mu
 import mujoco.viewer as m
 import time
 import cv2 as cv
+import imutils
+from door_detect import door_detect
 
 # === Paths ===
 cur_path = os.path.abspath(os.path.realpath(__file__))
@@ -34,16 +36,19 @@ with m.launch_passive(model, data) as viewer:
         # Update and render from camera named "arm_cam"
         # Use 'main' Camera for default view
 
-        renderer.update_scene(data, camera="arm_cam")  # camera on robot arm
+        renderer.update_scene(data, camera="main")  # camera on robot arm
         img = renderer.render()
+        img = imutils.rotate(img, 90)
         renderer.enable_depth_rendering()
         dpth = renderer.render()
+        dpth = imutils.rotate(dpth, 90)
         renderer.disable_depth_rendering()
         dpth_norm = cv.normalize(dpth, None, 0, 255, cv.NORM_MINMAX).astype('uint8')
         img_bgr = cv.cvtColor(img, cv.COLOR_RGB2BGR)   # convert for OpenCV display
-        dpth_disp = cv.applyColorMap(dpth_norm, cv.COLORMAP_JET)
+        annotated_frame, classes, boxes = door_detect(img_bgr)
+        dpth_disp = cv.applyColorMap(dpth_norm, cv.COLORMAP_PLASMA)
         cv.imshow("Depth View", dpth_disp)
-        cv.imshow("Arm Camera View", img_bgr)
+        cv.imshow("Arm Camera View", annotated_frame)
 
         # Optional: quit camera with 'q'
         if cv.waitKey(1) & 0xFF == ord('q'):

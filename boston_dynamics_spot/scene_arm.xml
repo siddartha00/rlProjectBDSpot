@@ -8,49 +8,42 @@
   <visual>
     <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
     <rgba haze="0.15 0.25 0.35 1"/> 
-    <global azimuth="220" elevation="-10"/>
-    <quality shadowsize="8192"/>
+    <global azimuth="220" elevation="-10" fovy="45"/>
+    <quality shadowsize="0"/>
   </visual>
 
   <asset>
         <mesh name="door" file="door.obj" />
         <mesh name="handle" file="handle.obj" />
         <texture type="2d" name="floor" file="textures/Wood_Floors_Oak_02-2k_basecolor.png" />
-        <texture type="2d" name="brick" file="textures/regular_bricks_red_01_2k_BaseColor.png" />
-        <texture type="2d" name="brass" file="textures/Mat 49_BaseColor_8bit_4k.png" />
         <texture type="2d" name="wood" file="textures/fine_wood_veneer_68_2k_Diffuse.png" />
         <material name="floor" texture="floor" texrepeat="1 1" texuniform="true" reflectance="0.35" />
-        <material name="brick" texture="brick" texrepeat="1 1" texuniform="true" reflectance="0.35" />
-        <material name="brass" texture="brass" texrepeat="1 1" texuniform="true" reflectance="0.35" />
         <material name="wood" texture="wood" texrepeat="1 1" texuniform="true" reflectance="0.35" />
     </asset>
     <worldbody>
         <light directional="true" pos="-0.5 0.5 3" dir="0 0 -1" />
         <body pos="0 0 0" name="room" euler="1.5708 1.5708 0">
             <geom type="box" pos="-12.5 -0.0 12.5" size="25 25 0.02" euler="1.5708 0 0" rgba="0.9 0.9 0.9 1" material="floor" friction="1 1 0.1" />
-            <geom type="box" pos="-12.5 1.51 25" size="12.5 1.51 0.2" material="brick" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
-            <geom type="box" pos="-12.5 1.51 0" size="12.5 1.51 0.2" material="brick" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
-            <geom type="box" euler="0.0 1.5708 0.0" pos="-25 1.51 12.5" size="12.5 1.51 0.2" material="brick" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
-            <geom type="box" euler="0.0 1.5708 0.0" pos="0 1.01 6" size="5.99 1.01 0.2" material="brick" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
-            <geom type="box" euler="0.0 1.5708 0.0" pos="0 1.01 19" size="5.99 1.01 0.2" material="brick" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
-            <geom type="box" euler="0.0 1.5708 0.0" pos="0 2.52 12.5" size="12.5 0.5 0.2" material="brick" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
+            <geom type="box" pos="-12.5 1.51 25" size="12.5 1.51 0.2" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
+            <geom type="box" pos="-12.5 1.51 0" size="12.5 1.51 0.2" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
+            <geom type="box" euler="0.0 1.5708 0.0" pos="-25 1.51 12.5" size="12.5 1.51 0.2" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
+            <geom type="box" euler="0.0 1.5708 0.0" pos="0 1.01 6" size="5.98 1.01 0.2" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
+            <geom type="box" euler="0.0 1.5708 0.0" pos="0 1.01 19" size="5.98 1.01 0.2" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
+            <geom type="box" euler="0.0 1.5708 0.0" pos="0 2.52 12.5" size="12.5 0.5 0.2" rgba="0.9 0.9 0.9 1" friction="1 1 0.1"/>
         </body>
-        <body pos="12.5 -0.2 1.02" name="door" euler="1.5708 0 0">
-            <geom type="mesh" mesh="door" pos="0 0 0" size="0.1" rgba="0.9 0.9 0.9 1" material="wood" contype="0" conaffinity="0"/>
+        <body pos="12.5 -0.0 1.02" name="door" euler="1.5708 0 0">
+            <geom type="mesh" mesh="door" pos="0 0 0" size="0.1" rgba="0.5 0.5 0.5 1" contype="0" conaffinity="0" material="wood"/>
             <geom name="door_collision" type="box" pos="0 0.0 0" size="0.5 0.99 0.02" contype="1" conaffinity="1" friction="1 0.1 0.01" rgba="0 0 0 0"/>
-            <geom type="mesh" mesh="handle" pos="-0.2 0 0.01" euler="1.5708 1.5708 0" size="0.1" material="brass" contype="0" conaffinity="0"/>
+            <geom type="mesh" mesh="handle" pos="-0.2 0 0.01" euler="1.5708 1.5708 0" size="0.1" rgba="0.8 0.8 0.8 1" contype="0" conaffinity="0"/>
             <geom type="capsule" pos="-0.275 0.0 0.06" euler="0 1.5708 0" size="0.01 0.07" contype="1" conaffinity="1" friction="1 0.1 0.01" rgba="0 0 0 0"/>
-            <geom type="mesh" mesh="handle" pos="-0.2 0 -0.01" euler="1.5708 1.5708 3.1416" size="0.1" material="brass" contype="0" conaffinity="0"/>
+            <geom type="mesh" mesh="handle" pos="-0.2 0 -0.01" euler="1.5708 1.5708 3.1416" size="0.1" rgba="0.8 0.8 0.8 1" contype="0" conaffinity="0"/>
             <geom type="capsule" pos="-0.275 0.0 -0.06" euler="0 1.5708 0" size="0.01 0.07" contype="1" conaffinity="1" friction="1 0.1 0.01" rgba="0 0 0 0"/>
-            <joint name="door_hinge" type="hinge" pos="0.5 0 0" axis="0 1 0" range="-1.57 1.57" damping="0" />
+            <joint name="door_hinge" type="hinge" pos="0.5 0 0" axis="0 1 0" range="-1.57 1.57" damping="0" frictionloss="0.5"/>
             <inertial mass="5" pos="0 0 0" fullinertia="0.1 0.1 0.1 0 0 0"/>
         </body>
         <body name="mass" pos="12.5 3 0.5">
-          <geom type="box" size="0.5 1 0.5" rgba='1 1 1 1' material="wood"/>
+          <geom type="box" size="0.5 1 0.5" rgba='0.41 0.41 0.41 1' />
           <inertial mass="1" pos="0 0 0" fullinertia="0.1 0.1 0.1 0 0 0"/>
         </body>
     </worldbody>
-    <actuator>
-        <motor name="door_motor" joint="door_hinge" gear="10"/> 
-    </actuator>
 </mujoco>

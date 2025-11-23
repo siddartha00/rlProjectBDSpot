@@ -219,7 +219,7 @@
                   <geom mesh="arm_link_wr0_1" material="BlackAbs" class="visual"/>
                   <geom class="collision" mesh="arm_link_wr0_coll"/>
                   <body name="arm_link_wr1">
-                    <camera name="arm_cam" pos="0 0 0.1" mode="fixed" fovy="90" euler="0 -1.5708 0"/>
+                    <!-- <camera name="arm_cam" pos="0 0 0.1" mode="fixed" fovy="90" euler="0 -1.5708 0"/> -->
                     <inertial pos="0.125168 0.000101374 -0.013998" quat="1 1 1 1" mass="0.785"
                       diaginertia="0.00176281 0.00168181 0.000767414"/>
                     <joint name="arm_wr1" axis="1 0 0" range="-2.87979 2.87979"/>

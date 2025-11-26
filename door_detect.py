@@ -97,7 +97,11 @@ def get_handle(src_img, door_bbox, dpth, cx, cy, f):
     eigenvalues, eigenvectors = np.linalg.eigh(covariance_matrix)
 
     # Get principal axis
+    view_vector = -centroid
+
     main_axis = eigenvectors[:, -1]
+    if np.dot(main_axis, view_vector) < 0:
+        main_axis = -main_axis
     main_axis = main_axis / np.linalg.norm(main_axis)
 
     return output_img, centroid, main_axis

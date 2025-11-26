@@ -14,11 +14,13 @@ def cam_2_world(data, model, point, cam_name: str):
     point_world = cam_pos + np.dot(cam_rot_matrix, point)
     return point_world
 
+
 def cam_2_world_vec(data, model, vec, cam_name: str):
     cam_id = mu.mj_name2id(model, mu.mjtObj.mjOBJ_CAMERA, cam_name)
     cam_rot_matrix = data.cam_xmat[cam_id].reshape(3, 3)
     point_world = np.dot(cam_rot_matrix, vec)
     return point_world
+
 
 # === Paths ===
 cur_path = os.path.abspath(os.path.realpath(__file__))
@@ -63,7 +65,6 @@ with m.launch_passive(model, data) as viewer:
         if len(detections['door']) > 0:
             door_bbox = detections['door'][0]
             
-            # FIX 1: Integer casting for depth indexing
             u, v = int(door_bbox[0]), int(door_bbox[1])
             u = max(0, min(u, 639)) # Safety clip
             v = max(0, min(v, 479))
@@ -80,10 +81,8 @@ with m.launch_passive(model, data) as viewer:
             # Handle Logic
             handle_annotated, handle_robot, orint_robot = get_handle(img_bgr, door_bbox, dpth, cx, cy, f)
             
-            # FIX 2: Check for None (Crash prevention)
             if handle_robot is not None and orint_robot is not None:
                 
-                # FIX 3: Apply the same Vision->MuJoCo Flip [x, -y, -z] to handle/vector
                 handle_mu = np.array([handle_robot[0], -handle_robot[1], -handle_robot[2]])
                 orint_mu  = np.array([orint_robot[0],  -orint_robot[1],  -orint_robot[2]])
 
@@ -93,7 +92,6 @@ with m.launch_passive(model, data) as viewer:
                 
                 print(f"Handle World: {handle_world} | Orientation: {orint_world}")
                 
-                # FIX 4: Update the display frame to show the PCA lines/Mask
                 annotated_frame = handle_annotated
 
         dpth_disp = cv.applyColorMap(dpth_norm, cv.COLORMAP_PLASMA)

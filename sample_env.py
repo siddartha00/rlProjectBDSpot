@@ -3,9 +3,24 @@ import mujoco as mu
 import mujoco.viewer as m
 import time
 import cv2 as cv
+from door_detect import indoor_detect, get_intrinsics, pixel_2_point, get_handle
 import numpy as np
 
-print(mu.__version__)
+
+def cam_2_world(data, model, point, cam_name: str):
+    cam_id = mu.mj_name2id(model, mu.mjtObj.mjOBJ_CAMERA, cam_name)
+    cam_pos = data.cam_xpos[cam_id]
+    cam_rot_matrix = data.cam_xmat[cam_id].reshape(3, 3)
+    point_world = cam_pos + np.dot(cam_rot_matrix, point)
+    return point_world
+
+
+def cam_2_world_vec(data, model, vec, cam_name: str):
+    cam_id = mu.mj_name2id(model, mu.mjtObj.mjOBJ_CAMERA, cam_name)
+    cam_rot_matrix = data.cam_xmat[cam_id].reshape(3, 3)
+    point_world = np.dot(cam_rot_matrix, vec)
+    return point_world
+
 
 # === Paths ===
 cur_path = os.path.abspath(os.path.realpath(__file__))
@@ -23,157 +38,65 @@ except Exception as e:
     print(f"Error loading MuJoCo environment: {e}")
     exit()
 
-# def get_feet_contact(model: mu.MjModel, data: mu.MjData, foot_geom_names, ground_geom_name="groundplane"):
-#     """
-#     Returns an array of 1/0 indicating whether each foot is in contact with the ground.
-    
-#     Args:
-#         model: MuJoCo model
-#         data: MuJoCo data
-#         foot_geom_names: list of strings, names of the foot geoms
-#         ground_geom_name: string, name of the ground geom
-#     Returns:
-#         np.array of shape (num_feet,), 1 if in contact, 0 if in air
-#     """
-#     feet_geom_ids = [model.geom(name).id for name in foot_geom_names]
-#     ground_geom_id = model.geom(ground_geom_name).id
-    
-#     # initialize contact array
-#     feet_contact = np.zeros(len(feet_geom_ids), dtype=int)
-    
-#     # loop over all contacts in this step
-#     for i in range(data.ncon):
-#         contact = data.contact[i]
-#         g1, g2 = contact.geom1, contact.geom2
-#         for j, foot_id in enumerate(feet_geom_ids):
-#             if (g1 == foot_id and g2 == ground_geom_id) or (g2 == foot_id and g1 == ground_geom_id):
-#                 feet_contact[j] = 1  # foot is in contact
-    
-#     return feet_contact
-
-def get_geom_id(model: mu.MjModel, name: str):
-    for i in range(model.ngeom):
-        geom_name = model.geom(i).name  # this is already a str
-        if geom_name == name:           # exact match
-            return i
-    raise ValueError(f"Geom name {name} not found")
-
-def get_feet_contact(model: mu.MjModel, data: mu.MjData, foot_names):
-    foot_geom_ids = [get_geom_id(model, name) for name in foot_names]
-    contacts = np.zeros(len(foot_names), dtype=int)
-
-    for i in range(data.ncon):
-        c = data.contact[i]
-        if c.geom1 in foot_geom_ids:
-            contacts[foot_geom_ids.index(c.geom1)] = 1
-        if c.geom2 in foot_geom_ids:
-            contacts[foot_geom_ids.index(c.geom2)] = 1
-
-    return contacts
-
-# Example
-# foot_names = ["FL", "FR", "HL", "HR"]
-# contacts = get_feet_contact(model, data, foot_names)
-# print("Feet in contact:", contacts)
-
-
-# === Example usage ===
-
-import numpy as np
-
-def get_foot_positions(model, data):
-    """
-    Returns world positions of all four feet.
-    """
-    foot_names = ["fl_lleg", "fr_lleg", "hl_lleg", "hr_lleg"]
-    foot_positions = {}
-
-    for name in foot_names:
-        body_id = model.body(name).id
-        # data.xpos[body_id] gives [x, y, z] of body in world frame
-        foot_positions[name] = np.array(data.xpos[body_id])
-
-    return foot_positions
-
-
-
+# ... (Previous imports and functions remain the same) ...
 
 # === Launch viewer and camera loop ===
 with m.launch_passive(model, data) as viewer:
     print("Viewer started. Use mouse/keyboard to control.")
-    print("Renderer type:", type(renderer))
-    print(model.opt.timestep)
+    
     while viewer.is_running():
-        # mu.mj_resetData(model,data)
-        # mu.mj_forward(model,data)
-        # mu.mj_resetData(model, data)
         step_time = time.time()
 
-        # print(data.qpos)
-        # print(data.ctrl)
-        # print(data.contact)
-        # foot_names = ["fl_foot", "fr_foot", "rl_foot", "rr_foot"]
-        default_pos = [0,0.8,-1.5,0,0.8,-1.5,0,1.0,-1.5,0,1.0,-1.5]
-        data.qpos[0:2] = np.array([
-                np.random.uniform(5.0, 20.0),   # x offset
-                np.random.uniform(-7.5, -3.5),   # y offset
-                # 0.35                            # z height above ground
-        ])
-        data.ctrl[:12] = default_pos
-        foot_names = ["FL", "FR", "HL", "HR"]
-        contacts = get_feet_contact(model, data, foot_names)
-        body_id = model.body("fr_lleg").id
-        foot_vel = data.cvel[body_id][3]  # linear velocity [vx, vy, vz]
-
-        total_joint_torque = (
-            data.qfrc_actuator +
-            data.qfrc_bias +
-            data.qfrc_constraint +
-            data.qfrc_applied
-        )
-
-        # print(data.actuator_force)
-        print(get_foot_positions(model,data))
-        # print(data.qpos[2])
-
-        # print("Feet contact array:", contacts)
-
-
-        # Simulate one step
-        # for i in range(model.njnt):
-        #     jname = model.joint(i).name
-        #     qpos_addr = model.jnt_qposadr[i]
-        #     qvel_addr = model.jnt_dofadr[i]
-
-        #     # Some joints (like free joints) use 7 qpos (quat + pos)
-        #     nq = 7 if model.jnt_type[i] == mu.mjtJoint.mjJNT_FREE else 1
-        #     nv = 6 if model.jnt_type[i] == mu.mjtJoint.mjJNT_FREE else 1
-
-        #     qpos_vals = data.qpos[qpos_addr:qpos_addr + nq]
-        #     qvel_vals = data.qvel[qvel_addr:qvel_addr + nv]
-
-        #     print(f"Joint: {jname}")
-        #     print(f"  Type: {model.jnt_type[i]}")
-        #     print(f"  qpos idx [{qpos_addr}:{qpos_addr + nq}] → {qpos_vals}")
-        #     print(f"  qvel idx [{qvel_addr}:{qvel_addr + nv}] → {qvel_vals}")
         mu.mj_step(model, data)
         viewer.sync()
 
-        # === Render camera ===
+        renderer.update_scene(data, camera="main")
+        img = renderer.render()
+        renderer.enable_depth_rendering()
+        dpth = renderer.render()
+        renderer.disable_depth_rendering()
+        
+        # Normalize depth for display
+        dpth_norm = cv.normalize(dpth, None, 0, 255, cv.NORM_MINMAX).astype('uint8')
+        img_bgr = cv.cvtColor(img, cv.COLOR_RGB2BGR)
+        
+        annotated_frame, detections = indoor_detect(img_bgr)
 
-        # Update and render from camera named "arm_cam"
-        # Use 'main' Camera for default view
+        if len(detections['door']) > 0:
+            door_bbox = detections['door'][0]
+            
+            u, v = int(door_bbox[0]), int(door_bbox[1])
+            u = max(0, min(u, 639)) # Safety clip
+            v = max(0, min(v, 479))
+            
+            # Door Location Logic
+            dz = dpth[v, u] # Row, Col
+            if 0.1 < dz < 10.0:
+                door_loc_robot = pixel_2_point(u, v, dz, cx, cy, f)
+                # Vision (+Y down) to MuJoCo (+Y up) conversion
+                mu_point = np.array([door_loc_robot[0], -door_loc_robot[1], -door_loc_robot[2]])
+                door_loc_world = cam_2_world(data, model, mu_point, 'main')
+                print(f"Door World: {door_loc_world}")
 
-        # renderer.update_scene(data, camera="arm_cam")  # camera on robot arm
-        # img = renderer.render()
-        # renderer.enable_depth_rendering()
-        # dpth = renderer.render()
-        # renderer.disable_depth_rendering()
-        # dpth_norm = cv.normalize(dpth, None, 0, 255, cv.NORM_MINMAX).astype('uint8')
-        # img_bgr = cv.cvtColor(img, cv.COLOR_RGB2BGR)   # convert for OpenCV display
-        # dpth_disp = cv.applyColorMap(dpth_norm, cv.COLORMAP_JET)
-        # cv.imshow("Depth View", dpth_disp)
-        # cv.imshow("Arm Camera View", img_bgr)
+            # Handle Logic
+            handle_annotated, handle_robot, orint_robot = get_handle(img_bgr, door_bbox, dpth, cx, cy, f)
+            
+            if handle_robot is not None and orint_robot is not None:
+                
+                handle_mu = np.array([handle_robot[0], -handle_robot[1], -handle_robot[2]])
+                orint_mu  = np.array([orint_robot[0],  -orint_robot[1],  -orint_robot[2]])
+
+                # Transform to World
+                handle_world = cam_2_world(data, model, handle_mu, 'main')
+                orint_world = cam_2_world_vec(data, model, orint_mu, 'main')
+                
+                print(f"Handle World: {handle_world} | Orientation: {orint_world}")
+                
+                annotated_frame = handle_annotated
+
+        dpth_disp = cv.applyColorMap(dpth_norm, cv.COLORMAP_PLASMA)
+        cv.imshow("Depth View", dpth_disp)
+        cv.imshow("Arm Camera View", annotated_frame) # Now shows lines if handle detected
 
         if cv.waitKey(1) & 0xFF == ord('q'):
             break

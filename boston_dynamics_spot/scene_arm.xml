@@ -1,7 +1,5 @@
 <mujoco model="spot with arm scene">
   <include file="spot_arm.xml"/>
-  <option timestep="0.008"/>
-  <option iterations="20"/>
 
   <statistic center="0.15 0.1 0.38" extent=".8" meansize="0.05"/>
 
@@ -45,7 +43,5 @@
           <geom type="box" size="0.5 1 0.5" rgba='0.41 0.41 0.41 1' />
           <inertial mass="1" pos="0 0 0" fullinertia="0.1 0.1 0.1 0 0 0"/>
         </body>
-    </worldbody><actuator>
-        <motor name="door_motor" joint="door_hinge" gear="10"/> 
-    </actuator>
+    </worldbody>
 </mujoco>

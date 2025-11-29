@@ -22,6 +22,41 @@ def cam_2_world_vec(data, model, vec, cam_name: str):
     return point_world
 
 
+def get_door_loc(detections, dpth, cx, cy, f):
+    door_bbox = detections['door'][0]
+    u, v = int(door_bbox[0]), int(door_bbox[1])
+    u = max(0, min(u, 639)) # Safety clip
+    v = max(0, min(v, 479))
+
+    # Door Location Logic
+    dz = dpth[v, u] # Row, Col
+    if 0.1 < dz < 10.0:
+        door_loc_robot = pixel_2_point(u, v, dz, cx, cy, f)
+        # Vision (+Y down) to MuJoCo (+Y up) conversion
+        mu_point = np.array([door_loc_robot[0], -door_loc_robot[1], -door_loc_robot[2]])
+        door_loc_world = cam_2_world(data, model, mu_point, 'arm_cam')
+        print(f"Door World: {door_loc_world}")
+        return door_loc_world
+
+
+def get_handle_loc(detections, dpth, cx, cy, f):
+ # Handle Logic
+    handle_bbox = detections['handle'][0]
+    _, handle_robot, orint_robot = get_handle(img_bgr, handle_bbox, dpth, cx, cy, f)
+    
+    if handle_robot is not None and orint_robot is not None:
+        
+        handle_mu = np.array([handle_robot[0], -handle_robot[1], -handle_robot[2]])
+        orint_mu  = np.array([orint_robot[0],  -orint_robot[1],  -orint_robot[2]])
+
+        # Transform to World
+        handle_world = cam_2_world(data, model, handle_mu, 'arm_cam')
+        orint_world = cam_2_world_vec(data, model, orint_mu, 'arm_cam')
+        
+        print(f"Handle World: {handle_world} | Orientation: {orint_world}")
+        return handle_world, orint_world
+
+
 # === Paths ===
 cur_path = os.path.abspath(os.path.realpath(__file__))
 parent_path = os.path.dirname(cur_path)
@@ -38,7 +73,7 @@ except Exception as e:
     print(f"Error loading MuJoCo environment: {e}")
     exit()
 
-# ... (Previous imports and functions remain the same) ...
+# ... (Previous imports and functions rearm_cam the same) ...
 
 # === Launch viewer and camera loop ===
 with m.launch_passive(model, data) as viewer:
@@ -50,7 +85,7 @@ with m.launch_passive(model, data) as viewer:
         mu.mj_step(model, data)
         viewer.sync()
 
-        renderer.update_scene(data, camera="main")
+        renderer.update_scene(data, camera="arm_cam")
         img = renderer.render()
         renderer.enable_depth_rendering()
         dpth = renderer.render()
@@ -63,36 +98,10 @@ with m.launch_passive(model, data) as viewer:
         annotated_frame, detections = indoor_detect(img_bgr)
 
         if len(detections['door']) > 0:
-            door_bbox = detections['door'][0]
-            
-            u, v = int(door_bbox[0]), int(door_bbox[1])
-            u = max(0, min(u, 639)) # Safety clip
-            v = max(0, min(v, 479))
-            
-            # Door Location Logic
-            dz = dpth[v, u] # Row, Col
-            if 0.1 < dz < 10.0:
-                door_loc_robot = pixel_2_point(u, v, dz, cx, cy, f)
-                # Vision (+Y down) to MuJoCo (+Y up) conversion
-                mu_point = np.array([door_loc_robot[0], -door_loc_robot[1], -door_loc_robot[2]])
-                door_loc_world = cam_2_world(data, model, mu_point, 'main')
-                print(f"Door World: {door_loc_world}")
+            door_loc_world = get_door_loc(detections, dpth, cx, cy, f)
 
-            # Handle Logic
-            handle_annotated, handle_robot, orint_robot = get_handle(img_bgr, door_bbox, dpth, cx, cy, f)
-            
-            if handle_robot is not None and orint_robot is not None:
-                
-                handle_mu = np.array([handle_robot[0], -handle_robot[1], -handle_robot[2]])
-                orint_mu  = np.array([orint_robot[0],  -orint_robot[1],  -orint_robot[2]])
-
-                # Transform to World
-                handle_world = cam_2_world(data, model, handle_mu, 'main')
-                orint_world = cam_2_world_vec(data, model, orint_mu, 'main')
-                
-                print(f"Handle World: {handle_world} | Orientation: {orint_world}")
-                
-                annotated_frame = handle_annotated
+        if len(detections['handle']) > 0:
+            handle_loc_world, handle_orint_world = get_handle_loc(detections, dpth, cx, cy, f)
 
         dpth_disp = cv.applyColorMap(dpth_norm, cv.COLORMAP_PLASMA)
         cv.imshow("Depth View", dpth_disp)

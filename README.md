@@ -65,7 +65,7 @@ Make sure the file name matches the model you want to use.
 
 ---
 
-## Important Note for TURNING Policy
+## Important Note
 
 If you are testing the **turning policy** or **straight policy**`,
 you must ensure that the MuJoCo viewer is enabled.

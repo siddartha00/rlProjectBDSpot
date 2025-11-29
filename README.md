@@ -16,6 +16,7 @@ updated_final_policies/
 ├── spot_env.py               # Environment for straight walking
 ├── spot_env_turn.py          # Environment for turning
 ├── test.py                   # Script for running policies
+├── test_command.py                   # Script for running policies
 ├── updated_final_policies/   # Folder containing trained models
 └── README.md
 ```
@@ -26,7 +27,7 @@ updated_final_policies/
 
 ## 1. Select which behavior you want to test
 
-Open `test.py` and toggle these import lines:
+Open `test_command.py` and toggle these import lines:
 
 ### Straight Walking:
 ```python
@@ -46,7 +47,7 @@ Just comment/uncomment based on what you want to test.
 
 ## 2. Set the model path
 
-Inside `test.py`, locate:
+Inside `test_command.py`, locate:
 
 ```python
 checkpoint_path = "PATH_TO_MODEL"

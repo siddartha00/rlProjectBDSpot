@@ -99,7 +99,7 @@ def get_foot_positions(model, data):
 
 
 class SpotEnv:
-    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=False, device="cuda", num_steps_per_ep = 2000):
+    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000, mode = 'sample'):
         # self.device = torch.device(device)
         self.num_obs = num_obs
         self.num_actions = num_actions
@@ -119,6 +119,7 @@ class SpotEnv:
         self.feet_air_time = np.array([0,0,0,0],dtype=float)
         self.terminate_1 = False
         self.base_height = 0.517
+        self.mode  = mode
         # self.hl_commands = ["forward", "left", "right", "stop"]
         # self.start_pos = self.data.qpos[0:3].copy()  # x, y, z
         # self.target_distance = 2
@@ -149,11 +150,12 @@ class SpotEnv:
         self.data.qpos[19:24] = arm_folded.copy()
         joint_angles = list(default_joint_angles.values())
         # print(joint_angles)
-        self.data.qpos[0:2] = np.array([
-                np.random.uniform(5.0, 20.0),   # x offset
-                np.random.uniform(-7.5, -3.5),   # y offset
-                # 0.35                            # z height above ground
-            ])
+        if self.mode == 'sample':
+            self.data.qpos[0:2] = np.array([
+                    np.random.uniform(5.0, 20.0),   # x offset
+                    np.random.uniform(-7.5, -3.5),   # y offset
+                    # 0.35                            # z height above ground
+                ])
         yaw = np.random.uniform(-1, 1)
         quat = self._yaw_to_quat(yaw)
         self.data.qpos[3:7] = quat
@@ -164,7 +166,8 @@ class SpotEnv:
         mu.mj_step(self.model, self.data)
 
         self.start_pos = self.data.qpos[0:3].copy()  # x, y, z
-        self.sample_velocity_command()
+        if self.mode == 'sample':
+            self.sample_velocity_command()
         
         def_pos = list(default_joint_angles.values())
         new_pos = []
@@ -218,11 +221,8 @@ class SpotEnv:
             self.prev_action,            # (12)
             remaining_distance * 0.5,
             self.data.qpos[2],
-            # torques_applied[:12],
             g_body
         ]
-
-        # print(g_body)
 
         obs_flatten = np.concatenate([
             np.ravel(x) if isinstance(x, (list, np.ndarray)) else np.array([x])
@@ -269,6 +269,10 @@ class SpotEnv:
 
         self.current_cmd = np.array([vx, vy, wz])
         return self.current_cmd
+    
+
+    def give_vel_command(self,ang):
+        self.current_cmd = [0,0,ang]
 
     def action_dims(self):
         return self.num_actions
@@ -296,7 +300,11 @@ class SpotEnv:
             new_pos.append(0.25*actions_motor_pos[i] + self.default_pos[i])
 
         # self.data.ctrl[:12] = 
-        self.data.ctrl[:12] = new_pos
+        if self.current_cmd[2] == 0.0:
+            self.data.ctrl[:12] = def_pos
+        else:
+            self.data.ctrl[:12] = new_pos
+        # self.data.ctrl[:12] = new_pos
         self.data.qpos[19:24] = arm_folded.copy()
         mu.mj_step(self.model, self.data)
 

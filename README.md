@@ -16,6 +16,7 @@ updated_final_policies/
 ├── spot_env.py               # Environment for straight walking
 ├── spot_env_turn.py          # Environment for turning
 ├── test.py                   # Script for running policies
+├── test_command.py                   # Script for running policies
 ├── updated_final_policies/   # Folder containing trained models
 └── README.md
 ```
@@ -26,7 +27,7 @@ updated_final_policies/
 
 ## 1. Select which behavior you want to test
 
-Open `test.py` and toggle these import lines:
+Open `test_command.py` and toggle these import lines:
 
 ### Straight Walking:
 ```python
@@ -46,7 +47,7 @@ Just comment/uncomment based on what you want to test.
 
 ## 2. Set the model path
 
-Inside `test.py`, locate:
+Inside `test_command.py`, locate:
 
 ```python
 checkpoint_path = "PATH_TO_MODEL"
@@ -64,7 +65,7 @@ Make sure the file name matches the model you want to use.
 
 ---
 
-## Important Note for TURNING Policy
+## Important Note
 
 If you are testing the **turning policy** or **straight policy**`,
 you must ensure that the MuJoCo viewer is enabled.
@@ -82,12 +83,20 @@ This ensures that the MuJoCo visualization opens automatically when testing the 
 
 ---
 
-## 3. Run the policy
+## 3. Set Velocity Command and Run
 
 Once imports and model path are set:
 
+Set vel variable inside the while loop of test_command.py
+
 ```bash
-python test.py
+while True:
+    vel = 0.5       # change this based on requirement (this will be angular velocity for turn and linear velocity for straight)
+    env.give_vel_command(vel)
+```
+
+```bash
+python test_command.py
 ```
 
 This will:

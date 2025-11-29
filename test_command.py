@@ -5,9 +5,10 @@ from datetime import datetime
 import torch
 import numpy as np
 from spot_env import SpotEnv
+import keyboard
+import time
 # from spot_env_turn import SpotEnv
 # from spot_env_back import SpotEnv
-
 from ppo import PPO
 
 
@@ -16,6 +17,7 @@ def test():
     print("============================================================================================")
 
     ################## hyperparameters ##################
+
     env_name = "spot_env_walking"
     has_continuous_action_space = True
     max_ep_len = 20000           # max timesteps in one episode
@@ -35,7 +37,7 @@ def test():
 
     #####################################################
 
-    env = SpotEnv()
+    env = SpotEnv(mode='command')
 
     # state space dimension
     state_dim = env.obs_dims()
@@ -58,53 +60,29 @@ def test():
     checkpoint_path = directory + "PPO_{}_{}_{}.pth".format(env_name, random_seed, run_num_pretrained)
     print("loading network from : " + checkpoint_path)
 
-    # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/PPO_spot_env_walking_0_0_back.pth"
-    # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_straight_2.pth"
-    checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_turn_4_final.pth"
-
-
+    checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_straight_2.pth"
+    # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_turn_4_final.pth"
     ppo_agent.load(checkpoint_path)
 
     print("--------------------------------------------------------------------------------------------")
+    state, timeout_ = env.reset()
+    if timeout_:
+        return
 
-    test_running_reward = 0
 
-
-    for ep in range(1, total_test_episodes+1):
-        ep_reward = 0
-        state, timeout_ = env.reset()
-        if timeout_:
-            continue
-        # time.sleep(3.0)
-
-        for t in range(1, max_ep_len+1):
+    try:
+        while True:
+            vel = 0.5       # change this based on requirement (this will be angular velocity for turn and linear velocity for straight)
+            env.give_vel_command(vel)
             action = ppo_agent.select_action(state)
-            state, reward, done, _ = env.step(action)
-            ep_reward += reward
-
-            # if render:
-            #     env.step(action)
+            state, reward, done, _ = env.step(action)            
             time.sleep(frame_delay)
+            
+    except KeyboardInterrupt:
+        print("Test stopped by user")
 
-            if done:
-                break
+    ppo_agent.buffer.clear()
 
-        # clear buffer
-        ppo_agent.buffer.clear()
-
-        test_running_reward +=  ep_reward
-        print('Episode: {} \t\t Reward: {}'.format(ep, round(ep_reward, 2)))
-        ep_reward = 0
-
-    # env.close()
-
-    print("============================================================================================")
-
-    avg_test_reward = test_running_reward / total_test_episodes
-    avg_test_reward = round(avg_test_reward, 2)
-    print("average test reward : " + str(avg_test_reward))
-
-    print("============================================================================================")
 
 
 if __name__ == '__main__':

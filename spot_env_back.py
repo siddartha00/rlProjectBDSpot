@@ -99,7 +99,7 @@ def get_foot_positions(model, data):
 
 
 class SpotEnv:
-    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000, mode = 'sample'):
+    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000):
         # self.device = torch.device(device)
         self.num_obs = num_obs
         self.num_actions = num_actions
@@ -108,7 +108,7 @@ class SpotEnv:
         self.simulate_action_latency = True  # there is a 1 step latency on real robot
         self.dt = 0.002  # control frequency on real robot is 50hz
         self.observations = []
-        self.current_cmd = [0.0,0,0]
+        self.current_cmd = [0.5,0,0]
         # self.prev_action = np.asarray([0,0.8,-0.5,0,0.8,-0.5,0,1.0,-1.5,0,1.0,-1.5])
         self.prev_action = np.asarray([0,0.0,0.0,0,0.0,0.0,0,0.0,0.0,0,0.0,0])
         self.default_pos = [0,0.8,-1.5,0,0.8,-1.5,0,1.0,-1.5,0,1.0,-1.5]
@@ -119,7 +119,6 @@ class SpotEnv:
         self.feet_air_time = np.array([0,0,0,0],dtype=float)
         self.terminate_1 = False
         self.base_height = 0.517
-        self.mode = mode
 
         # === Load model ===
         try:
@@ -270,7 +269,7 @@ class SpotEnv:
         self.target_distance = np.random.uniform(0.0, 3.0)
         # print(vx)
 
-        self.current_cmd = np.array([vx, vy, wz])
+        self.current_cmd = np.array([-vx, vy, wz])
         return self.current_cmd
 
     def action_dims(self):
@@ -279,9 +278,6 @@ class SpotEnv:
 
     def obs_dims(self):
         return self.num_obs
-    
-    def give_vel_command(self,lin):
-        self.current_cmd = [lin,0,0]
 
 
 
@@ -302,6 +298,7 @@ class SpotEnv:
             self.data.ctrl[:12] = def_pos
         else:
             self.data.ctrl[:12] = new_pos
+        # self.data.ctrl[:12] = new_pos
         self.data.qpos[19:24] = arm_folded.copy()
         # self.data.ctrl[12:17] = arm_folded.copy()
         mu.mj_step(self.model, self.data)
@@ -386,6 +383,8 @@ class SpotEnv:
 
         return obs_flatten, rews, done, None
 
+    def give_vel_command(self,lin):
+        self.current_cmd = [lin,0,0]
     # def position_to_torquePD(self,joint_motor_positions_diff):   # convert joint positions to respective torques using PDs
     #     # joint_names = list(default_joint_angles.keys())
     #     # def_joint_angles = [default_joint_angles[name] for name in joint_names]
@@ -430,6 +429,24 @@ class SpotEnv:
         lin_rew = np.exp(-lin_rew/tracking_sigma)
         return lin_rew
     
+    def _reward_tracking_lin_vel_directional(self):
+        current_lin_x = self.observations[0][0]
+        desired_lin_x_cmd = self.current_cmd[0]  # Use actual command, not observation
+        
+        # Scale command to match observation scaling (×2)
+        desired_lin_x = desired_lin_x_cmd * 2.0
+        
+        # Direction check - only reward if moving in correct direction
+        if desired_lin_x * current_lin_x < 0:  # Wrong direction
+            return 0.0
+        
+        # Use your working tracking formula
+        error = (desired_lin_x - current_lin_x) ** 2
+        tracking_sigma = 0.25
+        return np.exp(-error / tracking_sigma)
+
+    # Then replace in rewards:
+    # lin_vel_tracking = 1.0 * self._reward_tracking_lin_vel_directional()
     # angular tracking
     def _reward_tracking_ang_vel(self):
         current_ang_z = self.observations[1][2]
@@ -541,7 +558,7 @@ class SpotEnv:
         reward = np.mean(height_reward) + too_high_penalty + rhythmic_penalty
         
         # Only apply if moving
-        if self.observations[0][0]/2.0 < stationary_threshold:
+        if abs(self.observations[0][0]/2.0) < stationary_threshold:
             reward = 0.0
 
         return float(reward)
@@ -693,7 +710,7 @@ class SpotEnv:
         foot_lift_reward = 3.0 * self.reward_feet_air_height()  # 3x increase
         
         # === MODERATE TRACKING REWARDS ===
-        lin_vel_tracking =   1.0  * self._reward_tracking_lin_vel()
+        lin_vel_tracking =   1.0  * self._reward_tracking_lin_vel_directional()
         ang_vel_tracking =  -0.5 * (1 - self._reward_tracking_ang_vel())
 
         leg_alignment_reward = 2.0 * self.reward_leg_alignment()
@@ -720,4 +737,4 @@ class SpotEnv:
                     0.3 * sym_pen
                     )
         
-        return total_reward    
+        return total_reward

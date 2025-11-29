@@ -5,7 +5,8 @@ import torch
 import numpy as np
 
 from ppo import PPO
-from spot_env import SpotEnv
+# from spot_env import SpotEnv
+from spot_env_back import SpotEnv
 # from spot_env_turn import SpotEnv
 
 ################################### Training ###################################
@@ -109,6 +110,7 @@ def train():
     print("state space dimension : ", state_dim)
     print("action space dimension : ", action_dim)
     print("--------------------------------------------------------------------------------------------")
+
     if has_continuous_action_space:
         print("Initializing a continuous action space policy")
         print("--------------------------------------------------------------------------------------------")
@@ -118,6 +120,7 @@ def train():
         print("decay frequency of std of action distribution : " + str(action_std_decay_freq) + " timesteps")
     else:
         print("Initializing a discrete action space policy")
+
     print("--------------------------------------------------------------------------------------------")
     print("PPO update frequency : " + str(update_timestep) + " timesteps")
     print("PPO K epochs : ", K_epochs)
@@ -126,6 +129,7 @@ def train():
     print("--------------------------------------------------------------------------------------------")
     print("optimizer learning rate actor : ", lr_actor)
     print("optimizer learning rate critic : ", lr_critic)
+
     if random_seed:
         print("--------------------------------------------------------------------------------------------")
         print("setting random seed to ", random_seed)
@@ -144,13 +148,14 @@ def train():
     directory = "PPO_preTrained" + '/' + env_name + '/'
     checkpoint_path = directory + "PPO_{}_{}_{}.pth".format(env_name, random_seed, run_num_pretrained)
     # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/PPO_spot_env_walking_0_0_turn_4.pth"
-    # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/PPO_spot_env_walking_straight_best.pth"
+    # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/PPO_spot_env_walking_0_0_back.pth"
     # print("loading network from : " + checkpoint_path)
 
     # ppo_agent.load(checkpoint_path)
 
     # track total training time
     start_time = datetime.now().replace(microsecond=0)
+    
     print("Started training at (GMT) : ", start_time)
 
     print("============================================================================================")
@@ -177,8 +182,7 @@ def train():
 
     # training loop
     # while time_step <= max_training_timesteps:
-    while print_avg_reward < 7500:
-
+    while print_avg_reward < 15000:
         state, timeout_ = env.reset()
         if timeout_:
             continue
@@ -206,7 +210,6 @@ def train():
 
             time_step +=1
             current_ep_reward += reward
-
             # update PPO agent
             if time_step % update_timestep == 0:
                 ppo_agent.update()

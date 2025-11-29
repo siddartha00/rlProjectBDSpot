@@ -27,10 +27,10 @@ def indoor_detect(frame):
     return annotated_frame, detections
 
 
-def get_handle(src_img, door_bbox, dpth, cx, cy, f):
+def get_handle(src_img, handle_bbox, dpth, cx, cy, f):
     height, width = src_img.shape[:2]
 
-    [x_c, y_c, w_box, h_box] = door_bbox
+    [x_c, y_c, w_box, h_box] = handle_bbox
 
     # Calculate corners
     x1 = int(x_c - w_box // 2)

@@ -82,12 +82,20 @@ This ensures that the MuJoCo visualization opens automatically when testing the 
 
 ---
 
-## 3. Run the policy
+## 3. Set Velocity Command and Run
 
 Once imports and model path are set:
 
+Set vel variable inside the while loop of test_command.py
+
 ```bash
-python test.py
+while True:
+    vel = 0.5       # change this based on requirement (this will be angular velocity for turn and linear velocity for straight)
+    env.give_vel_command(vel)
+```
+
+```bash
+python test_command.py
 ```
 
 This will:

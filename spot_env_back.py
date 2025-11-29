@@ -269,7 +269,7 @@ class SpotEnv:
         self.target_distance = np.random.uniform(0.0, 3.0)
         # print(vx)
 
-        self.current_cmd = np.array([-vx, vy, wz])
+        self.current_cmd = np.array([-0.1, vy, wz])
         return self.current_cmd
 
     def action_dims(self):

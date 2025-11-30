@@ -282,7 +282,7 @@
     <position class="spot" name="arm_f1x" joint="arm_f1x"/>
   </actuator>
 
-  <keyframe>
+  <!-- <keyframe>
     <key name="home"
       qpos="
     12.5 -0.9 0.5
@@ -298,5 +298,5 @@
     0 1.04 -1.8
     0 1.04 -1.8
     0 -3.14 3.06 0 0 0 0"/>
-  </keyframe>
+  </keyframe> -->
 </mujoco>

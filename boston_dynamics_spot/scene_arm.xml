@@ -34,9 +34,9 @@
             <geom name="door_collision" type="box" pos="0 0.0 0" size="0.5 0.99 0.02" contype="1" conaffinity="1" friction="1 0.1 0.01" rgba="0 0 0 0"/>
             <body name="handle_body" pos="0 0 0">
                 <geom type="mesh" mesh="handle" pos="-0.2 0 0.01" euler="1.5708 1.5708 0" size="0.1" rgba="0.7 0.7 0.7 1" contype="0" conaffinity="0"/>
-                <geom type="capsule" pos="-0.275 0.0 0.06" euler="0 1.5708 0" size="0.015 0.07" contype="1" conaffinity="1" friction="1 0.1 0.01" rgba="0 0 0 0"/>
+                <geom type="capsule" pos="-0.275 0.0 0.06" euler="0 1.5708 0" size="0.015 0.07" contype="1" conaffinity="1" friction="1 0.1 0.01" rgba="0 0 0 0" solref="0.004" solimp="0.95 0.99"/>
                 <geom type="mesh" mesh="handle" pos="-0.2 0 -0.01" euler="1.5708 1.5708 3.1416" size="0.1" rgba="0.7 0.7 0.7 1" contype="0" conaffinity="0"/>
-                <geom type="capsule" pos="-0.275 0.0 -0.06" euler="0 1.5708 0" size="0.015 0.07" contype="1" conaffinity="1" friction="1 0.1 0.01" rgba="0 0 0 0"/>
+                <geom type="capsule" pos="-0.275 0.0 -0.06" euler="0 1.5708 0" size="0.015 0.07" contype="1" conaffinity="1" friction="1 0.1 0.01" rgba="0 0 0 0" solref="0.004" solimp="0.95 0.99"/>
             </body>
             <joint name="door_hinge" type="hinge" pos="0.5 0 0" axis="0 1 0" range="-1.57 1.57" damping="0" frictionloss="0.5"/>
             <inertial mass="5" pos="0 0 0" fullinertia="0.1 0.1 0.1 0 0 0"/>

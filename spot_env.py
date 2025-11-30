@@ -719,5 +719,5 @@ class SpotEnv:
                     0.5 * p_pen -       # posture deviation penalty
                     0.3 * sym_pen
                     )
-        
-        return total_reward    
+
+        return total_reward

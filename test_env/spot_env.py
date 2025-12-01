@@ -1,14 +1,9 @@
-import gym 
 from gym import Env, spaces
 import numpy as np
-import random
 import os
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import VecFrameStack
-from stable_baselines3.common.evaluation import evaluate_policy
+import cv2
 import mujoco as mu
-import mujoco.viewer as m
-import numpy as np
+import mujoco.viewer
 from pathlib import Path
 from spot_locomotion import LocomotionSkill
 
@@ -16,105 +11,199 @@ from spot_locomotion import LocomotionSkill
 ROOT_DIR = Path(__file__).resolve().parents[1]
 MUJOCO_MODEL = os.path.join(ROOT_DIR, 'boston_dynamics', 'scene_arm.xml')
 
+# Load model
 try:
-    model = mu.MjModlel.from_xml_path(MUJOCO_MODEL)
+    model = mu.MjModel.from_xml_path(MUJOCO_MODEL)
 except Exception as e:
-    print(f"Unable to create a Mujoco environment: {e}")
+    print(f"ERROR loading MuJoCo model: {e}")
     exit()
 
 
 class TestEnv(Env):
-    def __init__(self, target_position, render_mode = None, model = model):
-        ROOT =Path(__file__).resolve().parents[1]
-        MODEL_PATH = os.path.join(ROOT, 'boston_dynamics_spot', 'scene_arm.xml')
+    metadata = {"render_modes": ["human"]}
+
+    def __init__(self, target_position, render_mode=None, model=model):
         super().__init__()
-        try:
-            self.model = model
-            self.data = mu.MjData(self.model)
-            self.render_mode = render_mode
-        except Exception as e:
-            print(f"Unable to access Mujoco environment: {e}")
-        self.camera_name = 'main'
+
+        self.model = model
+        self.data = mu.MjData(model)
+        self.render_mode = render_mode
+        self.viewer = None
+        self.render = None
+        self.camera_name = "main"
+
         self.step_count = 0
-        self.target_position = target_position
-        self.dpth_shape = (1, 480, 640)
+        self.target_position = np.array(target_position, dtype=np.float32)
+
+        # Observation format: Depth, Mask, State
         self.observation_space = spaces.Dict({
-            "dpth" : spaces.Box(low = 0, high = 30, shape = self.dpth_shape, dtype = np.float32),
-            "state" : spaces.Box(low = -np.inf, high = np.inf, shape = (7,), dtype = np.float32)
+            "depth": spaces.Box(low=0, high=1, shape=(1, 480, 640), dtype=np.float32),
+            "obstacle_mask": spaces.Box(low=0, high=1, shape=(1, 480, 640), dtype=np.float32),
+            "state": spaces.Box(low=-np.inf, high=np.inf, shape=(7,), dtype=np.float32)
         })
-        self.action_space = spaces.Box(low = np.array([0, -1, 0]), high = np.array([1, 1, 1]))
+
+        # Action: [choose skill, turn velocity, linear velocity]
+        self.action_space = spaces.Box(
+            low=np.array([0, -1, 0]),
+            high=np.array([1, 1, 1]),
+            dtype=np.float32
+        )
+
         self.observation = None
 
+    # ---------------- DEPTH PROCESSING ---------------- #
+
     def get_depth(self):
-        w, h = 640, 480
-        rgb = np.zeros((h, w, 3), dtype=np.uint8)
-        depth = np.zeros((h, w), dtype=np.float32)
+        width, height = 640, 480
+        rgb = np.zeros((height, width, 3), dtype=np.uint8)
+        depth = np.zeros((height, width), dtype=np.float32)
+
         mu.mjr_render(self.data, self.model, self.camera_name, rgb, depth)
-        return depth[np.newaxis, :, :]
+
+        return self.process_depth(depth)
+
+    def process_depth(self, depth_raw):
+
+        depth = np.nan_to_num(depth_raw, nan=30.0)
+        depth = np.clip(depth, 0.2, 30.0)
+
+        # Normalize for NN input: 0 = near, 1 = far
+        depth_norm = (depth - 0.2) / (30.0 - 0.2)
+        depth_norm = cv2.GaussianBlur(depth_norm, (5, 5), 0)
+
+        # Obstacle detection mask
+        obstacle_threshold_meters = 1.5
+        mask = (depth < obstacle_threshold_meters).astype(np.float32)
+
+        # Cleanup mask
+        kernel1 = np.ones((5, 5), np.uint8)
+        kernel2 = np.ones((7, 7), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel1)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel2)
+
+        return depth_norm[np.newaxis], mask[np.newaxis]
+
+    # ---------------- STATE ---------------- #
 
     def get_robot_state(self):
-        # Example: base position and quaternion
         try:
             body_id = mu.mj_name2id(self.model, mu.mjtObj.mjOBJ_BODY, "body")
             pos = self.data.xpos[body_id]
             quat = self.data.xquat[body_id]
         except Exception as e:
-            print(f'Warning! unable to access robot pose: {e}')
-            pass
-        return np.concatenate([pos, quat])
-    
-    def obs(self):
-        obs = {
-            'dpth' : self.get_depth(),
-            'state' : self.get_robot_state()
-        }
-        return obs
+            print(f"ERROR getting robot state: {e}")
+            pos = np.zeros(3)
+            quat = np.zeros(4)
 
-    def reset(self, seed = None, options = None):
-        mu.mj_resetData(self.model, self.data)
-        self.step_count = 0
-        obs = self.obs()
-        return obs, {}
+        return np.concatenate([pos, quat])
+
+    def obs(self):
+        depth, mask = self.get_depth()
+        return {
+            "depth": depth,
+            "obstacle_mask": mask,
+            "state": self.get_robot_state()
+        }
+
+    # ---------------- REWARD FUNCTIONS ---------------- #
 
     def distance_reward(self):
-        """Negative Euclidean distance to target (closer = higher reward)."""
-        pos = self.get_robot_state()[:3]
-        dist = np.linalg.norm(pos[:2] - self.target_position[:2])
-        return -dist  # negative distance for shaping
+        pos = self.get_robot_state()[:2]
+        dist = np.linalg.norm(pos - self.target_position[:2])
+        return 1.5 * np.exp(-dist)
 
     def obstacle_penalty(self):
-        """Penalty if robot is too close to obstacles, based on depth image."""
-        depth = self.observation['dpth']
-        min_depth = np.min(depth)
-        if min_depth < 0.5:  # threshold for obstacle proximity
-            return -2.0
+        mask = self.observation["obstacle_mask"]
+        obstacle_ratio = np.mean(mask)
+
+        if obstacle_ratio > 0.05:
+            return -5.0 * obstacle_ratio
+
         return 0.0
 
-    def live_penalty(self):
-        """Small negative reward to encourage efficiency."""
-        return -0.01
-
     def orientation_reward(self):
-        """Optional: reward if robot heading roughly towards target."""
-        # Simple approximation: angle between robot forward vector and vector to target
+
         pos = self.get_robot_state()[:3]
-        quat = self.get_robot_state()[3:7]  # w,x,y,z
-        # convert quaternion to yaw
+        quat = self.get_robot_state()[3:7]
+
         w, x, y, z = quat
         yaw = np.arctan2(2*(w*z + x*y), 1 - 2*(y**2 + z**2))
-        forward_vec = np.array([np.cos(yaw), np.sin(yaw)])
-        to_target = self.target_position[:2] - pos[:2]
-        to_target /= np.linalg.norm(to_target)
-        alignment = np.dot(forward_vec, to_target)  # cos(angle)
-        return alignment  # between -1 and 1
 
+        forward = np.array([np.cos(yaw), np.sin(yaw)])
+        target_vec = self.target_position[:2] - pos[:2]
+        target_vec /= np.linalg.norm(target_vec)
+
+        return 0.5 * np.dot(forward, target_vec)
+
+    def live_penalty(self):
+        return -0.01
+
+    # ------------------- RENDER ------------------ #
+
+    def render(self):
+        """Handles two modes:
+           - human: Real-time interactive viewer
+           - rgb_array: returns a frame for ML pipelines
+        """
+
+        if self.render_mode == "human":
+            # Launch viewer once
+            if self.viewer is None:
+                self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
+            return  # nothing to return
+
+        if self.render_mode == "rgb_array":
+            width, height = 640, 480
+
+            if self.renderer is None:
+                self.renderer = mu.Renderer(self.model, width, height)
+
+            self.renderer.update_scene(self.data)
+            frame = self.renderer.render()
+
+            return np.asarray(frame)   # (480,640,3) RGB frame
+
+    # ---------------- MAIN STEP ---------------- #
 
     def step(self, action):
-        [skill_prob, turn_vel, linear_vel] = action
-        self.step_count += 1
+
+        skill_prob, turn_vel, linear_vel = action
         skill_name = "go_straight" if skill_prob > 0.5 else "turn"
         velocity = linear_vel if skill_name == "go_straight" else turn_vel
-        skill = LocomotionSkill(skill_name)
-        skill.run(velocity, 0.02, None)
+
+        locomotion = LocomotionSkill(skill_name)
+        locomotion.run(velocity, duration_sec=0.02, state=None)
+
+        self.step_count += 1
         self.observation = self.obs()
-        reward = 1.0
+
+        reward = (
+            self.distance_reward() +
+            self.orientation_reward() +
+            self.obstacle_penalty() +
+            self.live_penalty()
+        )
+
+        terminated = False
+        truncated = False
+
+        dist = np.linalg.norm(self.get_robot_state()[:2] - self.target_position[:2])
+
+        if dist < 0.25:
+            reward += 10.0
+            terminated = True
+
+        if self.step_count >= 1000:
+            truncated = True
+
+        return self.observation, reward, terminated, truncated, {}
+
+    # ---------------- ENV RESET ---------------- #
+    def reset(self, seed=None, options=None):
+        super().reset(seed=seed)
+
+        mu.mj_resetData(self.model, self.data)
+        self.step_count = 0
+
+        self.observation = self.obs()
+        return self.observation, {}

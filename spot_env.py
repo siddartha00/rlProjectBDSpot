@@ -12,6 +12,13 @@ import time
 cur_path = os.path.abspath(os.path.realpath(__file__))
 parent_path = os.path.dirname(cur_path)
 env_path = os.path.join(parent_path, 'boston_dynamics_spot', 'scene_arm.xml')
+try:
+    model = mu.MjModel.from_xml_path(env_path)
+    data = mu.MjData(model)
+    renderer = mu.Renderer(model)
+except Exception as e:
+    print(f"Error loading MuJoCo environment: {e}")
+    exit()
 
 
 default_joint_angles = {
@@ -99,7 +106,7 @@ def get_foot_positions(model, data):
 
 
 class SpotEnv:
-    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000, mode = 'sample'):
+    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000, mode = 'sample', model = model, data = data):
         # self.device = torch.device(device)
         self.num_obs = num_obs
         self.num_actions = num_actions
@@ -123,8 +130,8 @@ class SpotEnv:
 
         # === Load model ===
         try:
-            self.model = mu.MjModel.from_xml_path(env_path)
-            self.data = mu.MjData(self.model)
+            self.model = model
+            self.data = data
             renderer = mu.Renderer(self.model)
             print("MuJoCo environment loaded successfully.")
         except Exception as e:

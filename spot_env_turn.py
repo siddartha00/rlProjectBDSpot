@@ -12,6 +12,13 @@ import time
 cur_path = os.path.abspath(os.path.realpath(__file__))
 parent_path = os.path.dirname(cur_path)
 env_path = os.path.join(parent_path, 'boston_dynamics_spot', 'scene_arm.xml')
+try:
+    model = mu.MjModel.from_xml_path(env_path)
+    data = mu.MjData(model)
+    renderer = mu.Renderer(model)
+except Exception as e:
+    print(f"Error loading MuJoCo environment: {e}")
+    exit()
 
 default_joint_angles = {
     "fl_hx": 0.0,
@@ -99,7 +106,7 @@ def get_foot_positions(model, data):
 
 
 class SpotEnv:
-    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000, mode = 'sample'):
+    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000, mode = 'sample', model = model, data = data):
         # self.device = torch.device(device)
         self.num_obs = num_obs
         self.num_actions = num_actions
@@ -109,10 +116,8 @@ class SpotEnv:
         self.dt = 0.002  # control frequency on real robot is 50hz
         self.observations = []
         self.current_cmd = [0.5,0,0]
-        # self.prev_action = np.asarray([0,0.8,-0.5,0,0.8,-0.5,0,1.0,-1.5,0,1.0,-1.5])
         self.prev_action = np.asarray([0,0.0,0.0,0,0.0,0.0,0,0.0,0.0,0,0.0,0])
         self.default_pos = [0,0.8,-1.5,0,0.8,-1.5,0,1.0,-1.5,0,1.0,-1.5]
-        # self.default_pos = [0.005,-0.04,-0.2846,0.0053,-0.0443,-0.286,-0.00534,-0.0297,-0.272,-0.0055,-0.0297,-0.273]
         self.num_steps_per_ep = num_steps_per_ep
         self.current_step = 0
         self.show_viewer = show_viewer
@@ -120,14 +125,12 @@ class SpotEnv:
         self.terminate_1 = False
         self.base_height = 0.517
         self.mode  = mode
-        # self.hl_commands = ["forward", "left", "right", "stop"]
-        # self.start_pos = self.data.qpos[0:3].copy()  # x, y, z
-        # self.target_distance = 2
+        
 
         # === Load model ===
         try:
-            self.model = mu.MjModel.from_xml_path(env_path)
-            self.data = mu.MjData(self.model)
+            self.model = model
+            self.data = data
             renderer = mu.Renderer(self.model)
             print("MuJoCo environment loaded successfully.")
         except Exception as e:
@@ -287,9 +290,7 @@ class SpotEnv:
 
 
     def step(self,actions_motor_pos,view=False):        # step the environment by providing the control torques
-        # self.show_viewer = view
-        # motor_torques = self.position_to_torquePD(actions_motor_pos)
-        # self.data.ctrl[:12] = motor_torques
+       
         def_pos = list(default_joint_angles.values())
         new_pos = []
         for i in range(len(def_pos)):
@@ -392,36 +393,7 @@ class SpotEnv:
 
         return obs_flatten, rews, done, None
 
-    # def position_to_torquePD(self,joint_motor_positions_diff):   # convert joint positions to respective torques using PDs
-    #     # joint_names = list(default_joint_angles.keys())
-    #     # def_joint_angles = [default_joint_angles[name] for name in joint_names]
-    #     def_joint_angles = list(default_joint_angles.values())
-    #     sig_a = 0.2
-    #     required_motor_positions = []
-    #     current_motor_positions = self.data.qpos[7:19]
-    #     current_motor_vels = self.data.qvel[6:18]
-    #     for i in range(len(def_joint_angles)):
-    #         required_motor_positions.append(def_joint_angles[i] + sig_a*joint_motor_positions_diff[i])
-    #     error_positions = []
-    #     for i in range(len(def_joint_angles)):
-    #         error_positions.append(required_motor_positions[i] - current_motor_positions[i])
-        
-    #     kp = 50.0
-    #     kd = 1.0
-
-    #     final_torques = []
-
-    #     torque_limits = [-108.79,97.0]
-
-    #     for i in range(len(def_joint_angles)):
-    #         joint_torque = (kp*error_positions[i])-(kd*current_motor_vels[i])
-    #         if joint_torque < torque_limits[0]:
-    #             joint_torque = torque_limits[0]
-    #         if joint_torque > torque_limits[1]:
-    #             joint_torque = torque_limits[1]
-    #         final_torques.append(joint_torque)
-
-    #     return final_torques
+   
 
 
     def get_observation(self):        # return the observation vector

@@ -60,7 +60,7 @@ def test():
     checkpoint_path = directory + "PPO_{}_{}_{}.pth".format(env_name, random_seed, run_num_pretrained)
     print("loading network from : " + checkpoint_path)
 
-    checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_straight_2.pth"
+    checkpoint_path = "PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_straight_2.pth"
     # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_turn_4_final.pth"
     ppo_agent.load(checkpoint_path)
 

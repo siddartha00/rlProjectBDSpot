@@ -1,6 +1,5 @@
 import time
-from ..spot_env import SpotEnv as StraightEnv
-from ..spot_env_turn import SpotEnv as TurnEnv
+from spot_env import SpotEnv as StraightEnv
 from scipy.spatial.transform import Rotation as R
 from ppo import PPO
 from pathlib import Path
@@ -11,10 +10,7 @@ import numpy as np
 ROOT_PATH = Path(__file__).resolve().parents[1]
 MODEL_DIR = os.path.join(ROOT_PATH, 'PPO_preTrained', 'spot_env_walking', 'updated_final_policies')
 
-SKILL_MODELS = {
-    "go_straight": os.path.join(MODEL_DIR, 'PPO_spot_env_walking_0_0_straight_2.pth'),
-    "turn": os.path.join(MODEL_DIR, 'PPO_spot_env_walking_turn_4_final.pth')
-    }
+SKILL_MODEL = os.path.join(MODEL_DIR, 'PPO_spot_env_walking_0_0_straight_2.pth')
 
 default_joint_angles = {
     "fl_hx": 0.0,
@@ -40,29 +36,24 @@ arm_folded = np.array([
 ])
 
 
-class LocomotionSkill:
+class SkillStraight:
     """
     Generic low-level locomotion skill wrapper for HRL.
     Executes straight walking, turns, etc. using pretrained PPO policies.
     """
 
-    def __init__(self, skill_name: str, frame_delay: float = 0.0, model=None, data=None):
+    def __init__(self, frame_delay: float = 0.0, model=None, data=None):
         """
         Args:
             env: SpotEnv instance shared with high-level agent
             skill_name: str, one of ["go_straight", "turn"]
             frame_delay: optional sleep between timesteps
         """
-        if skill_name not in SKILL_MODELS:
-            raise ValueError(f"Unknown skill '{skill_name}'. Available: {list(SKILL_MODELS.keys())}")
 
+        print(f'Locomotion model type: {type(model)} data type: {type(data)}')
         # Use the environment instance (either shared or skill-specific)
-        if skill_name == "go_straight":
-            self.env = StraightEnv(mode='command', model=model, data=data)
-        elif skill_name == "turn":
-            self.env = TurnEnv(mode='command', model=model, data=data)
+        self.env = StraightEnv(mode='command', model=model, data=data, show_viewer=True)
         self.frame_delay = frame_delay
-        self.skill_name = skill_name
 
         # Initialize PPO agent
         state_dim = self.env.obs_dims()
@@ -75,11 +66,11 @@ class LocomotionSkill:
             K_epochs=20,
             eps_clip=0.2,
             has_continuous_action_space=True,
-            action_std=0.5
+            action_std_init=0.5
         )
 
         # Load pretrained weights for this skill
-        self.ppo_agent.load(SKILL_MODELS[skill_name])
+        self.ppo_agent.load(SKILL_MODEL)
 
     def get_state(self):
         """Build observation vector directly from the shared environment"""

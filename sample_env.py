@@ -25,11 +25,11 @@ def cam_2_world_vec(data, model, vec, cam_name: str):
 def get_door_loc(detections, dpth, cx, cy, f):
     door_bbox = detections['door'][0]
     u, v = int(door_bbox[0]), int(door_bbox[1])
-    u = max(0, min(u, 639)) # Safety clip
+    u = max(0, min(u, 639))  # Safety clip
     v = max(0, min(v, 479))
 
     # Door Location Logic
-    dz = dpth[v, u] # Row, Col
+    dz = dpth[v, u]  # Row, Col
     if 0.1 < dz < 10.0:
         door_loc_robot = pixel_2_point(u, v, dz, cx, cy, f)
         # Vision (+Y down) to MuJoCo (+Y up) conversion
@@ -40,19 +40,19 @@ def get_door_loc(detections, dpth, cx, cy, f):
 
 
 def get_handle_loc(detections, dpth, cx, cy, f):
- # Handle Logic
+    # Handle Logic
     handle_bbox = detections['handle'][0]
     _, handle_robot, orint_robot = get_handle(img_bgr, handle_bbox, dpth, cx, cy, f)
-    
+
     if handle_robot is not None and orint_robot is not None:
-        
+
         handle_mu = np.array([handle_robot[0], -handle_robot[1], -handle_robot[2]])
-        orint_mu  = np.array([orint_robot[0],  -orint_robot[1],  -orint_robot[2]])
+        orint_mu = np.array([orint_robot[0],  -orint_robot[1],  -orint_robot[2]])
 
         # Transform to World
         handle_world = cam_2_world(data, model, handle_mu, 'arm_cam')
         orint_world = cam_2_world_vec(data, model, orint_mu, 'arm_cam')
-        
+
         print(f"Handle World: {handle_world} | Orientation: {orint_world}")
         return handle_world, orint_world
 
@@ -78,7 +78,7 @@ except Exception as e:
 # === Launch viewer and camera loop ===
 with m.launch_passive(model, data) as viewer:
     print("Viewer started. Use mouse/keyboard to control.")
-    
+
     while viewer.is_running():
         step_time = time.time()
 
@@ -90,11 +90,11 @@ with m.launch_passive(model, data) as viewer:
         renderer.enable_depth_rendering()
         dpth = renderer.render()
         renderer.disable_depth_rendering()
-        
+
         # Normalize depth for display
         dpth_norm = cv.normalize(dpth, None, 0, 255, cv.NORM_MINMAX).astype('uint8')
         img_bgr = cv.cvtColor(img, cv.COLOR_RGB2BGR)
-        
+
         annotated_frame, detections = indoor_detect(img_bgr)
 
         if len(detections['door']) > 0:
@@ -105,7 +105,7 @@ with m.launch_passive(model, data) as viewer:
 
         dpth_disp = cv.applyColorMap(dpth_norm, cv.COLORMAP_PLASMA)
         cv.imshow("Depth View", dpth_disp)
-        cv.imshow("Arm Camera View", annotated_frame) # Now shows lines if handle detected
+        cv.imshow("Arm Camera View", annotated_frame)  # Now shows lines if handle detected
 
         if cv.waitKey(1) & 0xFF == ord('q'):
             break

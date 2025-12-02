@@ -2,22 +2,33 @@ import numpy as np
 import mujoco as mu
 from mujoco.viewer import launch_passive
 from gym import Env, spaces
-# from anti_collision_policy.skill_striaght import SkillStraight
-from anti_collision_policy.skill_turn import SkillTurn
+from anti_collision_policy.spot_locomotion import LocomotionSkill
+import os
+from pathlib import Path
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+MUJOCO_MODEL = os.path.join(ROOT_DIR, 'boston_dynamics_spot', 'scene_arm.xml')
+
+# Load model
+try:
+    model = mu.MjModel.from_xml_path(MUJOCO_MODEL)
+    print("MuJoCo model loaded successfully.")
+except Exception as e:
+    print(f"ERROR loading MuJoCo model: {e}")
+    exit()
 
 
 class TestEnv(Env):
     metadata = {"render_modes": ["human", "rgb_array"]}
 
-    def __init__(self, model=None, data=None, target_position=[-3, -3, 0.5], render_mode="human"):
+    def __init__(self, model=model, target_position=[-3, -3, 0.5], render_mode="human"):
         super().__init__()
         self.model = model
-        self.data = data
+        self.data = mu.MjData(model)
         mu.mj_forward(self.model, self.data)
         self.renderer = None
-        self.viewer = launch_passive(self.model, self.data)
-        self.skill_turn = SkillTurn(model=self.model, data=self.data)
-        # self.skill_straight = SkillStraight(model=self.model, data=self.data)
+        self.viewer = None
         self.render_mode = render_mode
         self.camera_name = "main"
         self.target_position = np.array(target_position, dtype=np.float32)
@@ -30,7 +41,7 @@ class TestEnv(Env):
         })
 
         self.action_space = spaces.Box(
-            low=np.array([0, -1.0, 0]), high=np.array([1, 1.0, 0.5]), dtype=np.float32
+            low=np.array([0, -1, 0]), high=np.array([1, 1, 1]), dtype=np.float32
         )
         self.observation = None
 
@@ -59,39 +70,12 @@ class TestEnv(Env):
 
     def step(self, action):
         skill_prob, turn_vel, linear_vel = action
-        
-        # Choose skill
-        if skill_prob > 0.5:
-            skill_name = "turn"
-            velocity = np.clip(turn_vel, -1.0, 1.0)  # Clamp to training range
-        else:
-            skill_name = "go_straight"
-            velocity = linear_vel
-        
-        print(f"Executing {skill_name} at velocity: {velocity}")
-        
-        # Execute skill for multiple steps
-        skill_steps = 20
-        
-        for step in range(skill_steps):
-            # Worker computes and applies action
-            action_applied = self.skill_turn.run(
-                velocity=velocity,
-                data=self.data,
-                model=self.model
-                )
-            
-            # Debug: Check action values
-            if step == 0:
-                print(f"  Action range: [{action_applied.min():.3f}, {action_applied.max():.3f}]")
-                print(f"  Default pos: {self.skill_turn.default_pos[:3]}...")
-            
-            # Step simulation
-            mu.mj_step(self.model, self.data)
-            
-            # Update viewer
-            if self.viewer:
-                self.viewer.sync()
+        skill_name = "go_straight" if skill_prob > 0.5 else "turn"
+        velocity = linear_vel if skill_name == "go_straight" else turn_vel
+        locomotion = LocomotionSkill(skill_name)
+        locomotion.run(velocity, duration_sec=0.02, state=None)
+        self.step_count += 1
+        self.observation = self.obs()
 
         dist = np.linalg.norm(self.get_robot_state()[:2] - self.target_position[:2])
         reward = 1.5 * np.exp(-dist) + 0.5 * np.dot(

@@ -8,17 +8,17 @@ import cv2 as cv
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import time
-# === Paths ===
-cur_path = os.path.abspath(os.path.realpath(__file__))
-parent_path = os.path.dirname(cur_path)
-env_path = os.path.join(parent_path, 'boston_dynamics_spot', 'scene_arm.xml')
-try:
-    model = mu.MjModel.from_xml_path(env_path)
-    data = mu.MjData(model)
-    renderer = mu.Renderer(model)
-except Exception as e:
-    print(f"Error loading MuJoCo environment: {e}")
-    exit()
+# # === Paths ===
+# cur_path = os.path.abspath(os.path.realpath(__file__))
+# parent_path = os.path.dirname(cur_path)
+# env_path = os.path.join(parent_path, 'boston_dynamics_spot', 'scene_arm.xml')
+# try:
+#     model = mu.MjModel.from_xml_path(env_path)
+#     data = mu.MjData(model)
+#     renderer = mu.Renderer(model)
+# except Exception as e:
+#     print(f"Error loading MuJoCo environment: {e}")
+#     exit()
 
 default_joint_angles = {
     "fl_hx": 0.0,
@@ -65,6 +65,8 @@ def get_feet_contact(model: mu.MjModel, data: mu.MjData, foot_names):
     return np.array(contacts)
 
 def get_foot_velocities(model, data):
+    print(f'clear model type: {type(model)} data type: {type(data)}')
+
     """
     Returns linear velocities (vx, vy, vz) for all four feet in world frame.
     Works for Unitree-style models with bodies named:
@@ -106,7 +108,7 @@ def get_foot_positions(model, data):
 
 
 class SpotEnv:
-    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000, mode = 'sample', model = model, data = data):
+    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000, mode = 'sample', model = None, data = None):
         # self.device = torch.device(device)
         self.num_obs = num_obs
         self.num_actions = num_actions
@@ -131,7 +133,7 @@ class SpotEnv:
         try:
             self.model = model
             self.data = data
-            renderer = mu.Renderer(self.model)
+            # renderer = mu.Renderer(self.model)
             print("MuJoCo environment loaded successfully.")
         except Exception as e:
             print(f"Error loading MuJoCo environment: {e}")
@@ -307,7 +309,7 @@ class SpotEnv:
             self.data.ctrl[:12] = new_pos
         # self.data.ctrl[:12] = new_pos
         self.data.qpos[19:24] = arm_folded.copy()
-        mu.mj_step(self.model, self.data)
+        # mu.mj_step(self.model, self.data)
 
         if self.show_viewer:
             if self.viewer.is_running():

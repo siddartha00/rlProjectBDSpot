@@ -208,3 +208,9 @@ __marimo__/
 
 # VS Code
 .vscode/
+
+
+
+runs
+logs
+*.zip

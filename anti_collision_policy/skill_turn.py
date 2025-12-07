@@ -76,7 +76,7 @@ class SkillTurn:
         # Load pretrained weights for this skill
         self.ppo_agent.load(SKILL_MODEL)
 
-    def get_state(self, data, velocity):
+    def get_state(self, data):
         """Build EXACTLY the same 52-dim observation as during training"""
         if self.start_pos is None:
             self.start_pos = data.qpos[0:3].copy()
@@ -137,8 +137,8 @@ class SkillTurn:
         """
         if self.start_pos is None:
             self.start_pos = data.qpos[0:3].copy()
-        self.current_cmd = [velocity, 0.0, 0.0]
-        current_state = self.get_state(data=data, velocity=velocity)
+        self.current_cmd = [0.0, 0.0, velocity]
+        current_state = self.get_state(data=data)
 
         # Get action from low-level PPO
 
@@ -149,6 +149,6 @@ class SkillTurn:
 
         # Step environment
         # current_state, reward, done, _ = self.env.step(action)
-        print(f"Worker: velocity={velocity}, action={actual_action[:3]}...")  # Debug
+        # print(f"Worker: velocity={velocity}, action={actual_action[:3]}...")  # Debug
 
         return actual_action

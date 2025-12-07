@@ -1,5 +1,5 @@
-import time
-from spot_env import SpotEnv as StraightEnv
+# import time
+# from spot_env import SpotEnv as StraightEnv
 from scipy.spatial.transform import Rotation as R
 from ppo import PPO
 from pathlib import Path
@@ -27,14 +27,6 @@ default_joint_angles = {
     "hr_kn": -1.5,
 }
 
-arm_folded = np.array([
-    0.0,    # shoulder yaw
-    -3.3,    # shoulder pitch up
-    3.3,   # elbow folded inward
-    -1.4,    # wrist pitch up
-    0.0     # wrist yaw
-])
-
 
 class SkillStraight:
     """
@@ -52,12 +44,18 @@ class SkillStraight:
 
         print(f'Locomotion model type: {type(model)} data type: {type(data)}')
         # Use the environment instance (either shared or skill-specific)
-        self.env = StraightEnv(mode='command', model=model, data=data, show_viewer=True)
+        # self.env = StraightEnv(mode='command', model=model, data=data, show_viewer=True)
+
         self.frame_delay = frame_delay
+        self.prev_action = np.zeros(12)
+        self.current_cmd = [0.5, 0.0, 0.0]
+        self.target_distance = 2
+        self.start_pos = None
+        self.default_pos = np.array(list(default_joint_angles.values()))
 
         # Initialize PPO agent
-        state_dim = self.env.obs_dims()
-        action_dim = self.env.action_dims()
+        state_dim = 52
+        action_dim = 12
         self.ppo_agent = PPO(
             state_dim, action_dim,
             lr_actor=0.001,
@@ -72,29 +70,31 @@ class SkillStraight:
         # Load pretrained weights for this skill
         self.ppo_agent.load(SKILL_MODEL)
 
-    def get_state(self):
+    def get_state(self, data):
         """Build observation vector directly from the shared environment"""
-        env = self.env
-        quat = env.data.qpos[3:7]  # [w, x, y, z]
+        if self.start_pos is None:
+            self.start_pos = data.qpos[0:3].copy()
+        
+        quat = data.qpos[3:7]  # [w, x, y, z]
         rot = R.from_quat([quat[1], quat[2], quat[3], quat[0]])
 
         # Base velocities
-        base_lin_vel_world = env.data.qvel[0:3]
-        base_ang_vel_body = env.data.qvel[3:6]
+        base_lin_vel_world = data.qvel[0:3]
+        base_ang_vel_body = data.qvel[3:6]
         base_lin_vel_body = rot.apply(base_lin_vel_world, inverse=True)
 
         # Orientation
         roll, pitch, yaw = rot.as_euler('xyz', degrees=False)
 
         # Joint states
-        q = env.data.qpos[7:19]
-        qdot = env.data.qvel[6:18]
+        q = data.qpos[7:19]
+        qdot = data.qvel[6:18]
         default_pos = np.array(list(default_joint_angles.values()))
         final_pos = q - default_pos
 
         # Commands
-        cmd = np.asarray(env.current_cmd)
-        remaining_distance = env.target_distance - np.linalg.norm(env.data.qpos[0:2] - env.start_pos[:2])
+        cmd = np.asarray(self.current_cmd)
+        remaining_distance = self.target_distance - np.linalg.norm(data.qpos[0:2] - self.start_pos[:2])
 
         # Gravity in body frame
         g_world = np.array([0, 0, -9.8])
@@ -109,15 +109,15 @@ class SkillStraight:
             [cmd[0]*2, cmd[1]*2, cmd[2]*0.25],
             final_pos,
             np.array(qdot) * 0.05,
-            env.prev_action,
+            self.prev_action,
             remaining_distance * 0.5,
-            env.data.qpos[2],
+            data.qpos[2],
             g_body
         ]
-        obs_flat = np.concatenate([np.ravel(x) if hasattr(x, "__len__") else [x] for x in obs])
+        obs_flat = np.concatenate([np.ravel(x) for x in obs])
         return obs_flat
 
-    def run(self, velocity: float, duration_sec: float, state):
+    def run(self, velocity: float, model, data):
         """
         Execute the skill for a fixed duration.
 
@@ -129,25 +129,18 @@ class SkillStraight:
         Returns:
             final_state: environment observation after running the skill
         """
-        current_state = state if state is not None else self.get_state()
-        start_time = time.time()
+        if self.start_pos is None:
+            self.start_pos = data.qpos[0:3].copy()
+        self.current_cmd = [velocity, 0.0, 0.0]
+        current_state = self.get_state(data=data)
 
-        while time.time() - start_time < duration_sec:
-            # Send velocity command to env
-            self.env.give_vel_command(velocity)
+        action_offset = self.ppo_agent.select_action(current_state)
+        actual_action = 0.25 * action_offset + self.default_pos
+        data.ctrl[:12] = actual_action
+        self.prev_action = action_offset
 
-            # Get action from low-level PPO
-            action = self.ppo_agent.select_action(current_state)
-
-            # Step environment
-            current_state, reward, done, _ = self.env.step(action)
-
-            # Optional delay for real-time simulation
-            if self.frame_delay > 0:
-                time.sleep(self.frame_delay)
-
-            # Stop if low-level episode ends
-            if done:
-                break
+        # Step environment
+        # current_state, reward, done, _ = self.env.step(action)
+        # print(f"Worker: velocity={velocity}, action={actual_action[:3]}...")  # Debug
 
         return current_state

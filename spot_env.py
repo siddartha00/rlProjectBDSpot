@@ -320,9 +320,9 @@ class SpotEnv:
             else:
                 print("Viewer closed by user.")
                 self.viewer = None
-        self.foot_vels = get_foot_velocities(self.model,self.data)
+        self.foot_vels = get_foot_velocities(self.model, self.data)
         self.feet_contacts = get_feet_contact(self.model, self.data, self.foot_names)
-        self.feet_positions = get_foot_positions(self.model,self.data)
+        self.feet_positions = get_foot_positions(self.model, self.data)
         quat = self.data.qpos[3:7]  # [w, x, y, z]
         rot = R.from_quat([quat[1], quat[2], quat[3], quat[0]])  # convert to (x, y, z, w)
 

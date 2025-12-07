@@ -1,7 +1,7 @@
 import numpy as np
 import mujoco as mu
 from mujoco.viewer import launch_passive
-from gym import Env, spaces
+from gymnasium import Env, spaces
 from anti_collision_policy.spot_locomotion import LocomotionSkill
 import os
 from pathlib import Path

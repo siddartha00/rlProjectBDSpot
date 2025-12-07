@@ -166,8 +166,8 @@ class TestEnv(Env):
         self.renderer.disable_depth_rendering()
 
         depth = np.nan_to_num(depth, nan=30.0).astype(np.float32)
-        depth = np.clip(depth, 0.2, 30.0)
-        depth_norm = (depth - 0.2) / (30.0 - 0.2)  # 0..1
+        depth = np.clip(depth, 0.5, 30.0)
+        depth_norm = (depth - 0.5) / (30.0 - 0.5)  # 0..1
         mask = (depth < 1.5).astype(np.float32)
         return depth_norm[np.newaxis, :, :], mask[np.newaxis, :, :]
 
@@ -201,7 +201,7 @@ class TestEnv(Env):
         obstacle_mask = obs["obstacle_mask"]
         coverage = float(np.mean(obstacle_mask))
 
-        obstacle_penalty = -10.0 * (coverage ** 2)
+        obstacle_penalty = -6.0 * (coverage ** 2)
 
         robot_xy = obs["state"][:2]
         dist = float(np.linalg.norm(robot_xy - self.target_position[:2]))
@@ -209,7 +209,7 @@ class TestEnv(Env):
         if self.prev_dist is not None:
             progress = self.prev_dist - dist
             if progress > 0:
-                progress_reward = 2.0 * progress * (0.8 + 0.2 * (1.0 - coverage))
+                progress_reward = 4.0 * progress * (0.8 + 0.2 * (1.0 - coverage))
             else:
                 progress_reward = -0.5
             self.prev_dist = dist
@@ -220,7 +220,7 @@ class TestEnv(Env):
         # --- NEW: heading alignment reward ---
         heading_error = float(obs["heading_yaw"][0])
         # Reward facing the goal, scaled down if many obstacles are visible
-        heading_weight = 1.0
+        heading_weight = 2.0
         heading_reward = heading_weight * np.cos(heading_error) * (1.0 - coverage)
         # -------------------------------------
 
@@ -232,7 +232,7 @@ class TestEnv(Env):
             goal_reward = 0.0
 
         time_penalty = -0.01
-        clear_bonus = 0.5 if coverage < 0.05 else 0.0
+        clear_bonus = 0.5 if coverage < 0.3 else 0.0
 
         total_reward = (
             obstacle_penalty

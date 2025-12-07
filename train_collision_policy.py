@@ -93,7 +93,7 @@ def main():
     # ===========================
     # Train
     # ===========================
-    total_timesteps = 50_000
+    total_timesteps = 100_000
     model.learn(total_timesteps=total_timesteps, callback=callback)
 
     save_path = "./ppo_spot_nav_50k"

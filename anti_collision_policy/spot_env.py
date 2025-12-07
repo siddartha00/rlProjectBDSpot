@@ -166,8 +166,8 @@ class TestEnv(Env):
         self.renderer.disable_depth_rendering()
 
         depth = np.nan_to_num(depth, nan=30.0).astype(np.float32)
-        depth = np.clip(depth, 0.5, 30.0)
-        depth_norm = (depth - 0.5) / (30.0 - 0.5)  # 0..1
+        depth = np.clip(depth, 0.3, 30.0)
+        depth_norm = (depth - 0.3) / (30.0 - 0.3)  # 0..1
         mask = (depth < 1.5).astype(np.float32)
         return depth_norm[np.newaxis, :, :], mask[np.newaxis, :, :]
 
@@ -198,10 +198,21 @@ class TestEnv(Env):
     # -----------------------
     def compute_reward(self):
         obs = self.observation
-        obstacle_mask = obs["obstacle_mask"]
-        coverage = float(np.mean(obstacle_mask))
+        obstacle_mask = obs["obstacle_mask"]          # (1, H, W)
+        m = obstacle_mask[0]                          # (H, W)
+        H, W = m.shape
+        w3 = W // 3
 
-        obstacle_penalty = -6.0 * (coverage ** 2)
+        left = m[:, :w3]
+        center = m[:, w3:2*w3]
+        right = m[:, 2*w3:]
+
+        cov_left = float(np.mean(left))
+        cov_center = float(np.mean(center))
+        cov_right = float(np.mean(right))
+        coverage = [cov_left, cov_center, cov_right]
+
+        obstacle_penalty = -5.0 * (cov_center ** 2)
 
         robot_xy = obs["state"][:2]
         dist = float(np.linalg.norm(robot_xy - self.target_position[:2]))
@@ -209,9 +220,9 @@ class TestEnv(Env):
         if self.prev_dist is not None:
             progress = self.prev_dist - dist
             if progress > 0:
-                progress_reward = 4.0 * progress * (0.8 + 0.2 * (1.0 - coverage))
+                progress_reward = 25.0 * progress * (0.8 + 0.2 * (1.0 - coverage))
             else:
-                progress_reward = -0.5
+                progress_reward = 3.0 * progress
             self.prev_dist = dist
         else:
             self.prev_dist = dist
@@ -221,7 +232,7 @@ class TestEnv(Env):
         heading_error = float(obs["heading_yaw"][0])
         # Reward facing the goal, scaled down if many obstacles are visible
         heading_weight = 2.0
-        heading_reward = heading_weight * np.cos(heading_error) * (1.0 - coverage)
+        heading_reward = heading_weight * (np.cos(heading_error) - 1.0) * (1.0 - coverage)
         # -------------------------------------
 
         if dist < 0.25:
@@ -232,7 +243,7 @@ class TestEnv(Env):
             goal_reward = 0.0
 
         time_penalty = -0.01
-        clear_bonus = 0.5 if coverage < 0.3 else 0.0
+        clear_bonus = 0.05 if coverage < 0.3 else 0.0
 
         total_reward = (
             obstacle_penalty
@@ -281,7 +292,7 @@ class TestEnv(Env):
         self.safe_set_arm_folded()
 
         # Execute macro-step (multiple physics steps)
-        skill_steps = 20
+        skill_steps = 5
         for _ in range(skill_steps):
             if skill_name == "go_straight":
                 self.skill_walk.run(
@@ -310,7 +321,7 @@ class TestEnv(Env):
             )
         )
         terminated = bool(dist < 0.25)
-        truncated = bool(self.step_count >= 50000)
+        truncated = bool(self.step_count >= 100000)
 
         obstacle_coverage = float(
             self.reward_components.get(

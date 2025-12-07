@@ -210,7 +210,8 @@ class TestEnv(Env):
         cov_left = float(np.mean(left))
         cov_center = float(np.mean(center))
         cov_right = float(np.mean(right))
-        coverage = [cov_left, cov_center, cov_right]
+        coverage_localized = [cov_left, cov_center, cov_right]
+        coverage = np.max(coverage_localized)
 
         obstacle_penalty = -5.0 * (cov_center ** 2)
 

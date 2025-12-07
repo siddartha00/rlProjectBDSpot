@@ -223,7 +223,7 @@ class TestEnv(Env):
             if progress > 0:
                 progress_reward = 25.0 * progress * (0.8 + 0.2 * (1.0 - coverage))
             else:
-                progress_reward = 3.0 * progress
+                progress_reward = 3.0 * progress * (0.8 + 0.2 * (1.0 - coverage))
             self.prev_dist = dist
         else:
             self.prev_dist = dist

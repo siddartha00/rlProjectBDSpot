@@ -1,57 +1,58 @@
 import torch
 import torch.nn as nn
-from gymnasium import spaces
+import torch.nn.functional as F
+import gymnasium as gym
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 
 class SpotCNN(BaseFeaturesExtractor):
     """CNN updated for observation WITH target info"""
 
-    def __init__(self, observation_space: spaces.Box, features_dim: int = 256):
-        # New observation size: 12288(depth) + 12288(mask) + 7(state) + 4(target) = 24587
-        super().__init__(observation_space, features_dim)
+    def __init__(self, observation_space: gym.spaces.Dict, target_hw=(96, 128)):
+        super().__init__(observation_space, features_dim=1)
 
-        # CNN architecture
+        assert isinstance(observation_space, gym.spaces.Dict)
+
+        self.target_h, self.target_w = target_hw
+
+        depth_space = observation_space["depth"]
+        mask_space = observation_space["obstacle_mask"]
+        state_space = observation_space["state"]
+        heading_space = observation_space["heading_yaw"]
+        target_space = observation_space["target_position"]  # NEW
+
+        assert isinstance(depth_space, gym.spaces.Box) and depth_space.shape[0] == 1
+        assert isinstance(mask_space, gym.spaces.Box) and mask_space.shape[0] == 1
+        assert isinstance(state_space, gym.spaces.Box) and state_space.shape[0] == 7
+        assert isinstance(heading_space, gym.spaces.Box) and heading_space.shape[0] == 1
+        assert isinstance(target_space, gym.spaces.Box) and target_space.shape[0] == 3
+
         self.cnn = nn.Sequential(
-            nn.Conv2d(2, 32, kernel_size=8, stride=4, padding=2),
+            nn.Conv2d(2, 16, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.BatchNorm2d(32),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.BatchNorm2d(64),
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.BatchNorm2d(128),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool2d((6, 8)),
             nn.Flatten(),
         )
 
-        # Calculate CNN output size
         with torch.no_grad():
-            test_input = torch.zeros(1, 2, 96, 128)
-            n_flatten = self.cnn(test_input).shape[1]
+            dummy = torch.zeros(1, 2, self.target_h, self.target_w)
+            n_cnn = self.cnn(dummy).shape[1]
 
-        print(f"CNN output features: {n_flatten}")
+        n_state = state_space.shape[0]          # 7
+        n_heading = heading_space.shape[0]      # 1
+        n_target = target_space.shape[0]        # 3
 
-        # Non-visual features: robot state (7) + target info (4)
-        self.non_visual_features = 11
+        total_features = n_cnn + n_state + n_heading + n_target  # UPDATED
 
-        # MLP for combining features
-        self.mlp = nn.Sequential(
-            nn.Linear(n_flatten + self.non_visual_features, 512),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(256, features_dim),
+        self.linear = nn.Sequential(
+            nn.Linear(total_features, 256),
             nn.ReLU(),
         )
 
-        # Initialize weights
-        self.apply(self._init_weights)
+        self._features_dim = 256
 
     def _init_weights(self, module):
         """Initialize weights for better training"""
@@ -63,24 +64,23 @@ class SpotCNN(BaseFeaturesExtractor):
             nn.init.constant_(module.weight, 1)
             nn.init.constant_(module.bias, 0)
 
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        batch_size = observations.shape[0]
+    def forward(self, observations: dict) -> torch.Tensor:
+        depth = observations["depth"]
+        mask = observations["obstacle_mask"]
 
-        # Split observation into components
-        # Total: 24587 = 12288(depth) + 12288(mask) + 7(state) + 4(target)
-        depth = observations[:, :12288].reshape(batch_size, 1, 96, 128)
-        mask = observations[:, 12288:24576].reshape(batch_size, 1, 96, 128)
-        robot_state = observations[:, 24576:24583]  # 7 values
-        target_info = observations[:, 24583:]       # 4 values [distance, heading_error, rel_x, rel_y]
+        if depth.dim() == 3:
+            depth = depth.unsqueeze(1)
+        if mask.dim() == 3:
+            mask = mask.unsqueeze(1)
 
-        # Combine depth and mask as 2-channel input
-        visual_input = torch.cat([depth, mask], dim=1)
+        x = torch.cat([depth, mask], dim=1)
+        x = F.interpolate(x, size=(self.target_h, self.target_w),
+                          mode="bilinear", align_corners=False)
+        cnn_out = self.cnn(x)
 
-        # Extract visual features
-        visual_features = self.cnn(visual_input)
+        state = observations["state"]
+        heading = observations["heading_yaw"]
+        target_position = observations["target_position"]
 
-        # Combine all features
-        combined = torch.cat([visual_features, robot_state, target_info], dim=1)
-
-        # Final feature representation
-        return self.mlp(combined)
+        flat = torch.cat([cnn_out, state, heading, target_position], dim=1)
+        return self.linear(flat)

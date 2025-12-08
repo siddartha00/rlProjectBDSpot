@@ -47,7 +47,7 @@ def make_env():
     env = TestEnv(
         model=model,
         data=data,
-        target_position=[12.5, -3.0, 0.0],
+        target_position=[12.5, -5.0, 0.0],
         render_mode=None,
     )
     return env
@@ -93,7 +93,7 @@ def main():
     # ===========================
     # Train
     # ===========================
-    total_timesteps = 100_000
+    total_timesteps = 50_000
     model.learn(total_timesteps=total_timesteps, callback=callback)
 
     save_path = "./ppo_spot_nav_50k"

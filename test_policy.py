@@ -11,8 +11,8 @@ from anti_collision_policy.ppo_agent import SpotCombinedExtractor  # ensures cla
 
 MODEL_PATH = "./ppo_spot_nav_50k.zip"   # or your 500k checkpoint
 TARGET_POSITION = [12.5, -3.0, 0.0]
-NUM_EPISODES = 5
-MAX_HL_STEPS = 1000    # high-level steps (each contains multiple mj_steps)
+NUM_EPISODES = 1
+MAX_HL_STEPS = 10000    # high-level steps (each contains multiple mj_steps)
 
 
 def make_env(render_mode="human"):

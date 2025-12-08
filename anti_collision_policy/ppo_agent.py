@@ -25,12 +25,14 @@ class SpotCombinedExtractor(BaseFeaturesExtractor):
         mask_space = observation_space["obstacle_mask"]
         state_space = observation_space["state"]
         heading_space = observation_space["heading_yaw"]
+        target_space = observation_space["target_position"]
 
         # Sanity checks
         assert isinstance(depth_space, gym.spaces.Box) and depth_space.shape[0] == 1
         assert isinstance(mask_space, gym.spaces.Box) and mask_space.shape[0] == 1
         assert isinstance(state_space, gym.spaces.Box) and state_space.shape[0] == 7
         assert isinstance(heading_space, gym.spaces.Box) and heading_space.shape[0] == 1
+        assert isinstance(target_space, gym.spaces.Box) and target_space.shape[0] == 3
 
         # CNN on stacked (depth, mask) of shape (B, 2, 96, 128)
         # Tune architecture as needed
@@ -51,7 +53,8 @@ class SpotCombinedExtractor(BaseFeaturesExtractor):
 
         n_state = state_space.shape[0]           # 7
         n_heading = heading_space.shape[0]       # 1
-        total_features = n_cnn + n_state + n_heading
+        n_target = target_space.shape[0]
+        total_features = n_cnn + n_state + n_heading + n_target
 
         # Optional linear layer to control final features_dim
         self.linear = nn.Sequential(
@@ -88,7 +91,8 @@ class SpotCombinedExtractor(BaseFeaturesExtractor):
         # Low-dim inputs
         state = observations["state"]          # (B, 7)
         heading = observations["heading_yaw"]  # (B, 1)
+        target_position = observations["target_position"]
 
-        flat = th.cat([cnn_out, state, heading], dim=1)
+        flat = th.cat([cnn_out, state, heading, target_position], dim=1)
         return self.linear(flat)  # (B, 256)
 

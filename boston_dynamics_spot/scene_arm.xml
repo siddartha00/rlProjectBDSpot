@@ -44,9 +44,12 @@
             <joint name="door_hinge" type="hinge" pos="0.5 0 0" axis="0 1 0" range="-1.57 1.57" damping="0" frictionloss="0.5"/>
             <inertial mass="5" pos="0 0 0" fullinertia="0.1 0.1 0.1 0 0 0"/>
         </body>
-        <body name="mass" pos="12.5 3 0.5">
+        <body name="mass" pos="12.5 5.0 0.5">
           <geom type="box" size="0.5 1 0.5" rgba='0.41 0.41 0.41 1' />
           <inertial mass="1" pos="0 0 0" fullinertia="0.1 0.1 0.1 0 0 0"/>
         </body>
     </worldbody>
+    <actuator>
+        <motor name="door_motor" joint="door_hinge" gear="100"/> 
+    </actuator>
 </mujoco>

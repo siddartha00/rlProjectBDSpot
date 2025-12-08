@@ -214,3 +214,4 @@ __marimo__/
 runs
 logs
 *.zip
+MUJOCO_LOG.TXT

@@ -46,8 +46,6 @@ python train_hrl.py
 
 ### Project Output
 
-Add an image showing the working output here:
-
 <img width="1440" height="245" alt="image" src="https://github.com/user-attachments/assets/64eab67f-2627-42ae-bb8b-c1d2593554d3" />
 
 ---

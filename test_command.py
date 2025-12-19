@@ -4,10 +4,10 @@ import time
 from datetime import datetime
 import torch
 import numpy as np
-from spot_env import SpotEnv
+from spot_env import SpotEnv_straight
 import keyboard
 import time
-# from spot_env_turn import SpotEnv
+from spot_env_turn import SpotEnv_Turn
 # from spot_env_back import SpotEnv
 from ppo import PPO
 
@@ -21,7 +21,7 @@ def test():
     env_name = "spot_env_walking"
     has_continuous_action_space = True
     max_ep_len = 20000           # max timesteps in one episode
-    action_std = 0.5            # set same std for action distribution which was used while saving
+    action_std = 0.1            # set same std for action distribution which was used while saving
 
     render = True              # render environment on screen
     frame_delay = 0             # if required; add delay b/w frames
@@ -37,7 +37,7 @@ def test():
 
     #####################################################
 
-    env = SpotEnv(mode='command')
+    env = SpotEnv_straight(mode='command')
 
     # state space dimension
     state_dim = env.obs_dims()
@@ -60,7 +60,7 @@ def test():
     checkpoint_path = directory + "PPO_{}_{}_{}.pth".format(env_name, random_seed, run_num_pretrained)
     print("loading network from : " + checkpoint_path)
 
-    checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_straight_2.pth"
+    checkpoint_path = "/home/sankarap/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_straight_2.pth"
     # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_turn_4_final.pth"
     ppo_agent.load(checkpoint_path)
 
@@ -72,7 +72,7 @@ def test():
 
     try:
         while True:
-            vel = 0.5       # change this based on requirement (this will be angular velocity for turn and linear velocity for straight)
+            vel = 0.8       # change this based on requirement (this will be angular velocity for turn and linear velocity for straight)
             env.give_vel_command(vel)
             action = ppo_agent.select_action(state)
             state, reward, done, _ = env.step(action)            

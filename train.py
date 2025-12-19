@@ -5,8 +5,8 @@ import torch
 import numpy as np
 
 from ppo import PPO
-# from spot_env import SpotEnv
-from spot_env_back import SpotEnv
+from spot_env import SpotEnv_straight
+# from spot_env_back import SpotEnv
 # from spot_env_turn import SpotEnv
 
 ################################### Training ###################################
@@ -48,7 +48,7 @@ def train():
 
     print("training environment name : " + env_name)
 
-    env = SpotEnv()
+    env = SpotEnv_straight()
 
     # state space dimension
     state_dim = env.obs_dims()
@@ -148,10 +148,10 @@ def train():
     directory = "PPO_preTrained" + '/' + env_name + '/'
     checkpoint_path = directory + "PPO_{}_{}_{}.pth".format(env_name, random_seed, run_num_pretrained)
     # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/PPO_spot_env_walking_0_0_turn_4.pth"
-    # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/PPO_spot_env_walking_0_0_back.pth"
+    # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/PPO_spot_env_walking_0_0_straight_2.pth"
     # print("loading network from : " + checkpoint_path)
 
-    # ppo_agent.load(checkpoint_path)
+    ppo_agent.load(checkpoint_path)
 
     # track total training time
     start_time = datetime.now().replace(microsecond=0)
@@ -182,7 +182,7 @@ def train():
 
     # training loop
     # while time_step <= max_training_timesteps:
-    while print_avg_reward < 15000:
+    while i_episode < 4500:
         state, timeout_ = env.reset()
         if timeout_:
             continue

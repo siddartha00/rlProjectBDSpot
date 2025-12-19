@@ -8,12 +8,13 @@ import cv2 as cv
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import time
+from door_detect import indoor_detect, get_intrinsics, pixel_2_point
+
 
 # === Paths ===
 cur_path = os.path.abspath(os.path.realpath(__file__))
 parent_path = os.path.dirname(cur_path)
 env_path = os.path.join(parent_path, 'boston_dynamics_spot', 'scene_arm.xml')
-
 
 default_joint_angles = {
     "fl_hx": 0.0,
@@ -34,7 +35,7 @@ arm_folded = np.array([
     0.0,    # shoulder yaw
     -3.3,    # shoulder pitch up
     3.3,   # elbow folded inward
-    -1.4,    # wrist pitch up
+    0.0,    # wrist pitch up
     0.0     # wrist yaw
 ])
 
@@ -99,8 +100,8 @@ def get_foot_positions(model, data):
 
 
 
-class SpotEnv:
-    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000):
+class SpotEnv_Common:
+    def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000, mode = 'sample'):
         # self.device = torch.device(device)
         self.num_obs = num_obs
         self.num_actions = num_actions
@@ -109,7 +110,7 @@ class SpotEnv:
         self.simulate_action_latency = True  # there is a 1 step latency on real robot
         self.dt = 0.002  # control frequency on real robot is 50hz
         self.observations = []
-        self.current_cmd = [0.5,0,0]
+        self.current_cmd = [0.0,0,0]
         # self.prev_action = np.asarray([0,0.8,-0.5,0,0.8,-0.5,0,1.0,-1.5,0,1.0,-1.5])
         self.prev_action = np.asarray([0,0.0,0.0,0,0.0,0.0,0,0.0,0.0,0,0.0,0])
         self.default_pos = [0,0.8,-1.5,0,0.8,-1.5,0,1.0,-1.5,0,1.0,-1.5]
@@ -120,12 +121,16 @@ class SpotEnv:
         self.feet_air_time = np.array([0,0,0,0],dtype=float)
         self.terminate_1 = False
         self.base_height = 0.517
+        self.mode = mode
+        self.pose = [0,0,0]
+        self.target_yaw = 0.0
+        _, self.cx, self.cy, self.f = get_intrinsics(640, 480, 90)
 
         # === Load model ===
         try:
             self.model = mu.MjModel.from_xml_path(env_path)
             self.data = mu.MjData(self.model)
-            renderer = mu.Renderer(self.model)
+            self.renderer = mu.Renderer(self.model, height=480, width=640)
             print("MuJoCo environment loaded successfully.")
         except Exception as e:
             print(f"Error loading MuJoCo environment: {e}")
@@ -142,20 +147,27 @@ class SpotEnv:
             self.viewer = mu.viewer.launch_passive(self.model, self.data)
 
 
-    def reset(self):       # reset bot to a default position and set joints to default angles
+    def reset(self,goal_point):       # reset bot to a default position and set joints to default angles
         mu.mj_resetData(self.model, self.data)
         joint_angles = list(default_joint_angles.values())
         # print(joint_angles)
-        if self.mode == 'sample':
+        # if self.mode == 'sample':
+        if True:
             self.data.qpos[0:2] = np.array([
-                    np.random.uniform(5.0, 20.0),   # x offset
-                    np.random.uniform(-7.5, -3.5),   # y offset
-                    # 0.35                            # z height above ground
-                ])
-        if self.mode == 'sample':
-            yaw = np.random.uniform(-1, 1)
+                np.random.uniform(1.0, 24.0),   # x offset
+                np.random.uniform(-10.5, -5.5),   # y offset
+                # 0.35                            # z height above ground
+            ])
+            # self.data.qpos[0:2] = np.array([
+            #     np.random.uniform(7.0, 13.0),    # x: 7-13m (6m range)
+            #     np.random.uniform(-5.5, -3.5),   # y: -5.5 to -3.5m (2m range)
+            # ])
+        # if self.mode == 'sample':
+        if True:
+            yaw = np.random.uniform(1, 2)
             quat = self._yaw_to_quat(yaw)
             self.data.qpos[3:7] = quat
+            self.target_yaw = yaw
         self.data.ctrl[:12] = joint_angles
         # self.data.qpos[7:19] = joint_angles
         self.data.qvel[:] = 0
@@ -182,11 +194,14 @@ class SpotEnv:
         # Transform linear velocity to body frame
         base_lin_vel_body = rot.apply(base_lin_vel_world, inverse=True)
         current_pos = self.data.qpos[0:3]
+        self.pose[0:2] = self.data.qpos[0:2]
 
         distance_traveled = np.linalg.norm(current_pos[:2] - self.start_pos[:2])  # XY-plane
         remaining_distance = self.target_distance - distance_traveled
 
         roll, pitch, yaw = rot.as_euler('xyz', degrees=False)
+        self.pose[0:2] = self.data.qpos[0:2]
+        self.pose[2] = yaw
         q = self.data.qpos[7:19]      # joint angles
         qdot = self.data.qvel[6:18]   # joint velocities
         default_pos = list(default_joint_angles.values())
@@ -221,6 +236,18 @@ class SpotEnv:
             # torques_applied[:12],
             g_body
         ]
+
+        # goal = [goal_point[0],goal_point[1],0.0]
+
+        if self.show_viewer:
+            mu.mjv_initGeom(
+            self.viewer.user_scn.geoms[i],
+            type=mu.mjtGeom.mjGEOM_SPHERE,
+            size=[0.02, 0, 0],
+            pos=0.1*np.array([goal_point[0], goal_point[1], 0.35]),
+            mat=np.eye(3).flatten(),
+            rgba=0.5*np.array([goal_point[0] + 1, goal_point[1] + 1, 0.35 + 1, 2])
+            )
 
         # print(g_body)
 
@@ -271,7 +298,7 @@ class SpotEnv:
         self.target_distance = np.random.uniform(0.0, 3.0)
         # print(vx)
 
-        self.current_cmd = np.array([-0.1, vy, wz])
+        self.current_cmd = np.array([vx, vy, wz])
         return self.current_cmd
 
     def action_dims(self):
@@ -280,11 +307,123 @@ class SpotEnv:
 
     def obs_dims(self):
         return self.num_obs
+    
+    def give_vel_command(self,lin,lin_or_ang):
+        if lin_or_ang:
+            self.current_cmd = [lin,0,0]
+        else:
+            self.current_cmd = [0,0,lin]
+
+    def step_turn(self,actions_motor_pos,view=False):        # step the environment by providing the control torques
+        # self.show_viewer = view
+        # motor_torques = self.position_to_torquePD(actions_motor_pos)
+        # self.data.ctrl[:12] = motor_torques\
+
+        def_pos = list(default_joint_angles.values())
+        new_pos = []
+        for i in range(len(def_pos)):
+            if actions_motor_pos[i] > 100:
+                actions_motor_pos[i] = 100
+            elif actions_motor_pos[i] < -100:
+                actions_motor_pos[i] = -100
+            new_pos.append(0.25*actions_motor_pos[i] + self.default_pos[i])
+
+        # self.data.ctrl[:12] = 
+        if self.current_cmd[2] == 0.0:
+            self.data.ctrl[:12] = def_pos
+        else:
+            self.data.ctrl[:12] = new_pos
+        # self.data.ctrl[:12] = new_pos
+        self.data.qpos[19:24] = arm_folded.copy()
+        mu.mj_step(self.model, self.data)
+
+        if self.show_viewer:
+            if self.viewer.is_running():
+                self.viewer.sync()
+            # Optional: if viewer is closed by user, handle it
+            else:
+                print("Viewer closed by user.")
+                self.viewer = None
+        self.foot_vels = get_foot_velocities(self.model,self.data)
+        self.feet_contacts = get_feet_contact(self.model, self.data, self.foot_names)
+        self.feet_positions = get_foot_positions(self.model,self.data)
+        quat = self.data.qpos[3:7]  # [w, x, y, z]
+        rot = R.from_quat([quat[1], quat[2], quat[3], quat[0]])  # convert to (x, y, z, w)
+
+        # ---- Base velocities ----
+        base_lin_vel_world = self.data.qvel[0:3]
+        base_ang_vel_body = self.data.qvel[3:6]  # already in body frame in MuJoCo
+
+        # Transform linear velocity to body frame
+        base_lin_vel_body = rot.apply(base_lin_vel_world, inverse=True)
+        current_pos = self.data.qpos[0:3]
+
+        distance_traveled = np.linalg.norm(current_pos[:2] - self.start_pos[:2])  # XY-plane
+        remaining_distance = self.target_distance - distance_traveled
+
+        roll, pitch, yaw = rot.as_euler('xyz', degrees=False)
+        self.pose[0:2] = self.data.qpos[0:2]
+        self.pose[2] = yaw
+
+        # # ---- Gravity projection in body frame ----
+        g_world = np.array([0, 0, -9.8])
+        g_body = rot.apply(g_world, inverse=True)
+
+        # ---- Joint states ----
+        q = self.data.qpos[7:19]      # joint angles
+        qdot = self.data.qvel[6:18]   # joint velocities
+        default_pos = list(default_joint_angles.values())
+        final_pos = []
+        for i in range(len(q)):
+            final_pos.append(q[i]-default_pos[i])
+
+        # ---- Commands (given externally, e.g., sampled target [vx, vy, yaw_rate]) ----
+        cmd = np.asarray(self.current_cmd)  # shape (3,)
+
+        # ---- Previous action ----
+        prev_action = np.asarray(actions_motor_pos)  # shape (12,)
+        torques_applied = self.data.actuator_force
+
+        # ---- Combine all ----
+        self.observations = [
+            np.array(base_lin_vel_body) * 2,     # (3)
+            np.array(base_ang_vel_body) * 0.25,     # (3)
+            roll,
+            pitch,
+            [cmd[0]*2,cmd[1]*2,cmd[2]*0.25],                   # (3)
+            final_pos,                     # (12)
+            np.array(qdot) * 0.05,                  # (12)
+            self.prev_action,            # (12)
+            remaining_distance * 0.5,
+            self.data.qpos[2],
+            # torques_applied[:12],
+            g_body
+        ]
+
+        # obs_flatten = np.concatenate(self.observations).flatten()
+        obs_flatten = np.concatenate([
+            np.ravel(x) if isinstance(x, (list, np.ndarray)) else np.array([x])
+            for x in self.observations
+        ])
 
 
 
 
-    def step(self,actions_motor_pos,view=False):        # step the environment by providing the control torques
+
+        self.prev_action = np.asarray(actions_motor_pos)
+
+        rews = self.rewards(actions_motor_pos)
+        done = self.terminate()
+        
+        self.current_step+=1
+
+        if self.terminate_1 == True:
+            rews-=100        
+
+        return obs_flatten, rews, done, None
+
+
+    def step_straight(self,actions_motor_pos,view=False):        # step the environment by providing the control torques
         
         def_pos = list(default_joint_angles.values())
         new_pos = []
@@ -300,7 +439,6 @@ class SpotEnv:
             self.data.ctrl[:12] = def_pos
         else:
             self.data.ctrl[:12] = new_pos
-        # self.data.ctrl[:12] = new_pos
         self.data.qpos[19:24] = arm_folded.copy()
         # self.data.ctrl[12:17] = arm_folded.copy()
         mu.mj_step(self.model, self.data)
@@ -331,7 +469,8 @@ class SpotEnv:
 
         roll, pitch, yaw = rot.as_euler('xyz', degrees=False)
 
-
+        self.pose[0:2] = self.data.qpos[0:2]
+        self.pose[2] = yaw
         # # ---- Gravity projection in body frame ----
         g_world = np.array([0, 0, -9.8])
         g_body = rot.apply(g_world, inverse=True)
@@ -384,9 +523,10 @@ class SpotEnv:
             rews-=100        
 
         return obs_flatten, rews, done, None
+    
+    def get_current_pose(self):
+        return self.pose
 
-    def give_vel_command(self,lin):
-        self.current_cmd = [lin,0,0]
     # def position_to_torquePD(self,joint_motor_positions_diff):   # convert joint positions to respective torques using PDs
     #     # joint_names = list(default_joint_angles.keys())
     #     # def_joint_angles = [default_joint_angles[name] for name in joint_names]
@@ -431,24 +571,16 @@ class SpotEnv:
         lin_rew = np.exp(-lin_rew/tracking_sigma)
         return lin_rew
     
-    def _reward_tracking_lin_vel_directional(self):
-        current_lin_x = self.observations[0][0]
-        desired_lin_x_cmd = self.current_cmd[0]  # Use actual command, not observation
+    def _reward_yaw_deviation(self):
+        """Quadratic penalty for yaw deviation"""
+        current_yaw = self.pose[2]
+        target_yaw = self.target_yaw
         
-        # Scale command to match observation scaling (×2)
-        desired_lin_x = desired_lin_x_cmd * 2.0
+        yaw_error = abs(current_yaw - target_yaw)
+        yaw_penalty = yaw_error * yaw_error
         
-        # Direction check - only reward if moving in correct direction
-        if desired_lin_x * current_lin_x < 0:  # Wrong direction
-            return 0.0
-        
-        # Use your working tracking formula
-        error = (desired_lin_x - current_lin_x) ** 2
-        tracking_sigma = 0.25
-        return np.exp(-error / tracking_sigma)
-
-    # Then replace in rewards:
-    # lin_vel_tracking = 1.0 * self._reward_tracking_lin_vel_directional()
+        return yaw_penalty
+    
     # angular tracking
     def _reward_tracking_ang_vel(self):
         current_ang_z = self.observations[1][2]
@@ -560,7 +692,7 @@ class SpotEnv:
         reward = np.mean(height_reward) + too_high_penalty + rhythmic_penalty
         
         # Only apply if moving
-        if abs(self.observations[0][0]/2.0) < stationary_threshold:
+        if self.observations[0][0]/2.0 < stationary_threshold:
             reward = 0.0
 
         return float(reward)
@@ -649,13 +781,13 @@ class SpotEnv:
         return penalty
     
     def terminate(self):
-        if self.observations[2] > 0.35 or self.observations[3] > 0.35 or self.observations[9] > 1.0:
+        if self.observations[2] > 0.35 or self.observations[3] > 0.35 or self.observations[9] > 2.0:
             self.terminate_1 = True
 
 
-        if self.observations[2] > 0.35 or self.observations[3] > 0.35  or self.current_step >= self.num_steps_per_ep or self.observations[9] > 1.0:
-            if self.current_step >= self.num_steps_per_ep:
-                print("Episode ended")
+        if self.observations[2] > 0.35 or self.observations[3] > 0.35  or self.current_step >= self.num_steps_per_ep or self.observations[9] > 2.0:
+            # if self.current_step >= self.num_steps_per_ep:
+            #     print("Episode ended")
             if self.observations[2] > 0.35 or self.observations[3] > 0.35:
                 print("roll or pitch")
             if self.observations[9] > 1.0:
@@ -712,8 +844,8 @@ class SpotEnv:
         foot_lift_reward = 3.0 * self.reward_feet_air_height()  # 3x increase
         
         # === MODERATE TRACKING REWARDS ===
-        lin_vel_tracking =   1.0  * self._reward_tracking_lin_vel_directional()
-        ang_vel_tracking =  -0.5 * (1 - self._reward_tracking_ang_vel())
+        lin_vel_tracking =   1.0  * self._reward_tracking_lin_vel()
+        # ang_vel_tracking =  -0.5 * (1 - self._reward_tracking_ang_vel())
 
         leg_alignment_reward = 2.0 * self.reward_leg_alignment()
         
@@ -730,8 +862,10 @@ class SpotEnv:
         gait_q = self.reward_gait_quality_forward()
         gait_q = 0.5*np.clip(gait_q, 0.0, 1.0)
 
+        yaw_penalty = -0.5 * self._reward_yaw_deviation()
+
         total_reward = (foot_lift_reward + 
-                    lin_vel_tracking + ang_vel_tracking + leg_alignment_reward +
+                    lin_vel_tracking + yaw_penalty + leg_alignment_reward +
                     joint_similarity + action_penalty + 
                     orientation_penalty + sliding_penalty + gait_q +
                     ang_vel_xy_penalty -       # [-0.5, 0]
@@ -739,4 +873,56 @@ class SpotEnv:
                     0.3 * sym_pen
                     )
         
-        return total_reward
+        return total_reward    
+    
+    def cam_2_world(self,data, model, point, cam_name: str):
+        cam_id = mu.mj_name2id(model, mu.mjtObj.mjOBJ_CAMERA, cam_name)
+        cam_pos = data.cam_xpos[cam_id]
+        cam_rot_matrix = data.cam_xmat[cam_id].reshape(3, 3)
+        point_world = cam_pos + np.dot(cam_rot_matrix, point)
+        return point_world
+
+
+    def cam_2_world_vec(self, data, model, vec, cam_name: str):
+        cam_id = mu.mj_name2id(model, mu.mjtObj.mjOBJ_CAMERA, cam_name)
+        cam_rot_matrix = data.cam_xmat[cam_id].reshape(3, 3)
+        point_world = np.dot(cam_rot_matrix, vec)
+        return point_world
+    
+    def get_door_loc(self, detections, dpth, cx, cy, f):
+        door_bbox = detections['door'][0]
+        u, v = int(door_bbox[0]), int(door_bbox[1])
+        u = max(0, min(u, 639)) # Safety clip
+        v = max(0, min(v, 479))
+
+        dz = dpth[v, u] # Row, Col
+        if 0.1 < dz < 10.0:
+            door_loc_robot = pixel_2_point(u, v, dz, cx, cy, f)
+            # Vision (+Y down) to MuJoCo (+Y up) conversion
+            mu_point = np.array([door_loc_robot[0], -door_loc_robot[1], -door_loc_robot[2]])
+            door_loc_world = self.cam_2_world(self.data, self.model, mu_point, 'arm_cam')
+            print(f"Door World: {door_loc_world}")
+            return door_loc_world
+
+    def door_detect_env(self):
+
+        self.renderer.update_scene(self.data, camera="arm_cam")
+        img = self.renderer.render()
+        self.renderer.enable_depth_rendering()
+        dpth = self.renderer.render()
+        self.renderer.disable_depth_rendering()
+        
+        # Normalize depth for display
+        # dpth_norm = cv.normalize(dpth, None, 0, 255, cv.NORM_MINMAX).astype('uint8')
+        img_bgr = cv.cvtColor(img, cv.COLOR_RGB2BGR)
+        
+        annotated_frame, detections = indoor_detect(img_bgr)
+
+        if len(detections['door']) > 0:
+            self.door_loc_world = self.get_door_loc(detections, dpth, self.cx, self.cy, self.f)
+            # return self.door_loc_world
+            cv.imshow("DEBUG IMAGE", annotated_frame)
+            #cv.waitKey(1)
+            return self.door_loc_world
+        # cv.imshow("Arm Camera View", img) # Now shows lines if handle detected
+        return None

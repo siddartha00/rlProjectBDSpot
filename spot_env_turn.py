@@ -98,7 +98,7 @@ def get_foot_positions(model, data):
 
 
 
-class SpotEnv:
+class SpotEnv_Turn:
     def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000, mode = 'sample'):
         # self.device = torch.device(device)
         self.num_obs = num_obs
@@ -119,6 +119,7 @@ class SpotEnv:
         self.feet_air_time = np.array([0,0,0,0],dtype=float)
         self.terminate_1 = False
         self.base_height = 0.517
+        self.pose = [0,0,0]
         self.mode  = mode
         # self.hl_commands = ["forward", "left", "right", "stop"]
         # self.start_pos = self.data.qpos[0:3].copy()  # x, y, z
@@ -190,6 +191,8 @@ class SpotEnv:
         remaining_distance = self.target_distance - distance_traveled
 
         roll, pitch, yaw = rot.as_euler('xyz', degrees=False)
+        self.pose[0:2] = self.data.qpos[0:2]
+        self.pose[2] = yaw
         q = self.data.qpos[7:19]      # joint angles
         qdot = self.data.qvel[6:18]   # joint velocities
         default_pos = list(default_joint_angles.values())
@@ -333,7 +336,8 @@ class SpotEnv:
         remaining_distance = self.target_distance - distance_traveled
 
         roll, pitch, yaw = rot.as_euler('xyz', degrees=False)
-
+        self.pose[0:2] = self.data.qpos[0:2]
+        self.pose[2] = yaw
 
         # # ---- Gravity projection in body frame ----
         g_world = np.array([0, 0, -9.8])
@@ -392,6 +396,8 @@ class SpotEnv:
 
         return obs_flatten, rews, done, None
 
+    def get_current_pose(self):
+        return self.pose
     # def position_to_torquePD(self,joint_motor_positions_diff):   # convert joint positions to respective torques using PDs
     #     # joint_names = list(default_joint_angles.keys())
     #     # def_joint_angles = [default_joint_angles[name] for name in joint_names]
@@ -613,8 +619,8 @@ class SpotEnv:
 
 
         if self.observations[2] > 0.35 or self.observations[3] > 0.35  or self.current_step >= self.num_steps_per_ep or self.observations[9] > 1.0:
-            if self.current_step >= self.num_steps_per_ep:
-                print("Episode ended")
+            # if self.current_step >= self.num_steps_per_ep:
+            #     print("Episode ended")
             if self.observations[2] > 0.35 or self.observations[3] > 0.35:
                 print("roll or pitch")
             if self.observations[9] > 1.0:

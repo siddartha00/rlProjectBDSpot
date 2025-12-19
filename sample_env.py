@@ -113,11 +113,11 @@ with m.launch_passive(model, data) as viewer:
         # print(data.contact)
         # foot_names = ["fl_foot", "fr_foot", "rl_foot", "rr_foot"]
         default_pos = [0,0.8,-1.5,0,0.8,-1.5,0,1.0,-1.5,0,1.0,-1.5]
-        data.qpos[0:2] = np.array([
-                np.random.uniform(5.0, 20.0),   # x offset
-                np.random.uniform(-7.5, -3.5),   # y offset
-                # 0.35                            # z height above ground
-        ])
+        # data.qpos[0:2] = np.array([
+        #         np.random.uniform(5.0, 20.0),   # x offset
+        #         np.random.uniform(-7.5, -3.5),   # y offset
+        #         # 0.35                            # z height above ground
+        # ])
         data.ctrl[:12] = default_pos
         foot_names = ["FL", "FR", "HL", "HR"]
         contacts = get_feet_contact(model, data, foot_names)

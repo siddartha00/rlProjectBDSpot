@@ -16,17 +16,17 @@ env_path = os.path.join(parent_path, 'boston_dynamics_spot', 'scene_arm.xml')
 
 default_joint_angles = {
     "fl_hx": 0.0,
-    "fl_hy": 0.8,
-    "fl_kn": -1.5,
+    "fl_hy": 1.04,
+    "fl_kn": -1.8,
     "fr_hx": 0.0,
-    "fr_hy": 0.8,
-    "fr_kn": -1.5,
+    "fr_hy": 1.04,
+    "fr_kn": -1.8,
     "hl_hx": 0.0,
-    "hl_hy": 1.0,
-    "hl_kn": -1.5,
+    "hl_hy": 1.04,
+    "hl_kn": -1.8,
     "hr_hx": 0.0,
-    "hr_hy": 1.0,
-    "hr_kn": -1.5,
+    "hr_hy": 1.04,
+    "hr_kn": -1.8,
 }
 
 arm_folded = np.array([
@@ -98,7 +98,7 @@ def get_foot_positions(model, data):
 
 
 
-class SpotEnv:
+class SpotEnv_straight:
     def __init__(self, num_obs = 52, num_actions = 12, num_commands = 4, show_viewer=True, device="cuda", num_steps_per_ep = 2000, mode = 'sample'):
         # self.device = torch.device(device)
         self.num_obs = num_obs
@@ -111,7 +111,7 @@ class SpotEnv:
         self.current_cmd = [0.0,0,0]
         # self.prev_action = np.asarray([0,0.8,-0.5,0,0.8,-0.5,0,1.0,-1.5,0,1.0,-1.5])
         self.prev_action = np.asarray([0,0.0,0.0,0,0.0,0.0,0,0.0,0.0,0,0.0,0])
-        self.default_pos = [0,0.8,-1.5,0,0.8,-1.5,0,1.0,-1.5,0,1.0,-1.5]
+        self.default_pos = [0,1.04,-1.8,0,1.04,-1.8,0,1.04,-1.8,0,1.04,-1.8]
         # self.default_pos = [0.005,-0.04,-0.2846,0.0053,-0.0443,-0.286,-0.00534,-0.0297,-0.272,-0.0055,-0.0297,-0.273]
         self.num_steps_per_ep = num_steps_per_ep
         self.current_step = 0
@@ -120,6 +120,8 @@ class SpotEnv:
         self.terminate_1 = False
         self.base_height = 0.517
         self.mode = mode
+        self.pose = [0,0,0]
+        self.target_yaw = 0.0
 
         # === Load model ===
         try:
@@ -146,15 +148,19 @@ class SpotEnv:
         mu.mj_resetData(self.model, self.data)
         joint_angles = list(default_joint_angles.values())
         # print(joint_angles)
-        if self.mode == 'sample':
+        # if self.mode == 'sample':
+        if True:
             self.data.qpos[0:2] = np.array([
                     np.random.uniform(5.0, 20.0),   # x offset
                     np.random.uniform(-7.5, -3.5),   # y offset
                     # 0.35                            # z height above ground
                 ])
-        yaw = np.random.uniform(-1, 1)
-        quat = self._yaw_to_quat(yaw)
-        self.data.qpos[3:7] = quat
+        # if self.mode == 'sample':
+        if True:
+            yaw = np.random.uniform(-1, 1)
+            quat = self._yaw_to_quat(yaw)
+            self.data.qpos[3:7] = quat
+            self.target_yaw = yaw
         self.data.ctrl[:12] = joint_angles
         # self.data.qpos[7:19] = joint_angles
         self.data.qvel[:] = 0
@@ -181,11 +187,14 @@ class SpotEnv:
         # Transform linear velocity to body frame
         base_lin_vel_body = rot.apply(base_lin_vel_world, inverse=True)
         current_pos = self.data.qpos[0:3]
+        self.pose[0:2] = self.data.qpos[0:2]
 
         distance_traveled = np.linalg.norm(current_pos[:2] - self.start_pos[:2])  # XY-plane
         remaining_distance = self.target_distance - distance_traveled
 
         roll, pitch, yaw = rot.as_euler('xyz', degrees=False)
+        self.pose[0:2] = self.data.qpos[0:2]
+        self.pose[2] = yaw
         q = self.data.qpos[7:19]      # joint angles
         qdot = self.data.qvel[6:18]   # joint velocities
         default_pos = list(default_joint_angles.values())
@@ -204,6 +213,10 @@ class SpotEnv:
         g_body = rot.apply(g_world, inverse=True)
 
         # ---- Previous action ----
+        current_yaw = self.pose[2]
+        target_yaw = self.target_yaw
+        
+        yaw_error = abs(current_yaw - target_yaw)
 
         # ---- Combine all ----
         self.observations = [
@@ -215,7 +228,7 @@ class SpotEnv:
             final_pos,                     # (12)
             np.array(qdot) * 0.05,                  # (12)
             self.prev_action,            # (12)
-            remaining_distance * 0.5,
+            yaw_error,
             self.data.qpos[2],
             # torques_applied[:12],
             g_body
@@ -332,7 +345,8 @@ class SpotEnv:
 
         roll, pitch, yaw = rot.as_euler('xyz', degrees=False)
 
-
+        self.pose[0:2] = self.data.qpos[0:2]
+        self.pose[2] = yaw
         # # ---- Gravity projection in body frame ----
         g_world = np.array([0, 0, -9.8])
         g_body = rot.apply(g_world, inverse=True)
@@ -348,6 +362,11 @@ class SpotEnv:
         # ---- Commands (given externally, e.g., sampled target [vx, vy, yaw_rate]) ----
         cmd = np.asarray(self.current_cmd)  # shape (3,)
 
+        current_yaw = self.pose[2]
+        target_yaw = self.target_yaw
+        
+        yaw_error = abs(current_yaw - target_yaw)
+
         # ---- Combine all ----
         self.observations = [
             np.array(base_lin_vel_body) * 2,     # (3)
@@ -358,7 +377,7 @@ class SpotEnv:
             final_pos,                     # (12)
             np.array(qdot) * 0.05,                  # (12)
             self.prev_action,            # (12)
-            remaining_distance * 0.5,
+            yaw_error,
             self.data.qpos[2],
             # torques_applied[:12],
             g_body
@@ -385,6 +404,9 @@ class SpotEnv:
             rews-=100        
 
         return obs_flatten, rews, done, None
+    
+    def get_current_pose(self):
+        return self.pose
 
     # def position_to_torquePD(self,joint_motor_positions_diff):   # convert joint positions to respective torques using PDs
     #     # joint_names = list(default_joint_angles.keys())
@@ -429,6 +451,16 @@ class SpotEnv:
         tracking_sigma = 0.25
         lin_rew = np.exp(-lin_rew/tracking_sigma)
         return lin_rew
+    
+    def _reward_yaw_deviation(self):
+        """Quadratic penalty for yaw deviation"""
+        current_yaw = self.pose[2]
+        target_yaw = self.target_yaw
+        
+        yaw_error = abs(current_yaw - target_yaw)
+        yaw_penalty = yaw_error * yaw_error
+        
+        return yaw_penalty
     
     # angular tracking
     def _reward_tracking_ang_vel(self):
@@ -503,7 +535,7 @@ class SpotEnv:
     # reward to lift feet at certain height
 
     def reward_feet_air_height(self, 
-                       desired_air_height=0.12,   # REDUCED from 0.2 to 8cm (more realistic)
+                       desired_air_height=0.15,   # REDUCED from 0.2 to 8cm (more realistic)
                        max_air_height=0.2,       # REDUCED from 0.25
                        symmetric_bonus=True,
                        stationary_threshold=0.1):
@@ -635,8 +667,8 @@ class SpotEnv:
 
 
         if self.observations[2] > 0.35 or self.observations[3] > 0.35  or self.current_step >= self.num_steps_per_ep or self.observations[9] > 1.0:
-            if self.current_step >= self.num_steps_per_ep:
-                print("Episode ended")
+            # if self.current_step >= self.num_steps_per_ep:
+            #     print("Episode ended")
             if self.observations[2] > 0.35 or self.observations[3] > 0.35:
                 print("roll or pitch")
             if self.observations[9] > 1.0:
@@ -694,9 +726,9 @@ class SpotEnv:
         
         # === MODERATE TRACKING REWARDS ===
         lin_vel_tracking =   1.0  * self._reward_tracking_lin_vel()
-        ang_vel_tracking =  -0.5 * (1 - self._reward_tracking_ang_vel())
+        # ang_vel_tracking =  -0.5 * (1 - self._reward_tracking_ang_vel())
 
-        leg_alignment_reward = 2.0 * self.reward_leg_alignment()
+        leg_alignment_reward = 1.0 * self.reward_leg_alignment()
         
         # === REDUCE PENALTIES ===
         joint_similarity     =  -0.1   * self._reward_similar_to_default()  # Reduced from -0.4
@@ -711,8 +743,12 @@ class SpotEnv:
         gait_q = self.reward_gait_quality_forward()
         gait_q = 0.5*np.clip(gait_q, 0.0, 1.0)
 
+        yaw_penalty = -10.0 * self._reward_yaw_deviation()
+
+        # print(yaw_penalty)
+
         total_reward = (foot_lift_reward + 
-                    lin_vel_tracking + ang_vel_tracking + leg_alignment_reward +
+                    lin_vel_tracking + yaw_penalty + leg_alignment_reward +
                     joint_similarity + action_penalty + 
                     orientation_penalty + sliding_penalty + gait_q +
                     ang_vel_xy_penalty -       # [-0.5, 0]

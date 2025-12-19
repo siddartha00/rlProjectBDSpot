@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 import torch
 import numpy as np
-from spot_env import SpotEnv
+from spot_env import SpotEnv_straight
 # from spot_env_turn import SpotEnv
 # from spot_env_back import SpotEnv
 
@@ -19,7 +19,7 @@ def test():
     env_name = "spot_env_walking"
     has_continuous_action_space = True
     max_ep_len = 20000           # max timesteps in one episode
-    action_std = 0.5            # set same std for action distribution which was used while saving
+    action_std = 0.2            # set same std for action distribution which was used while saving
 
     render = True              # render environment on screen
     frame_delay = 0             # if required; add delay b/w frames
@@ -35,7 +35,7 @@ def test():
 
     #####################################################
 
-    env = SpotEnv()
+    env = SpotEnv_straight()
 
     # state space dimension
     state_dim = env.obs_dims()
@@ -59,8 +59,8 @@ def test():
     print("loading network from : " + checkpoint_path)
 
     # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/PPO_spot_env_walking_0_0_back.pth"
-    # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_straight_2.pth"
-    checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_turn_4_final.pth"
+    checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/PPO_spot_env_walking_0_0_straight_2.pth"
+    # checkpoint_path = "/home/prashanth/rlProjectBDSpot/PPO_preTrained/spot_env_walking/updated_final_policies/PPO_spot_env_walking_0_0_turn_4_final.pth"
 
 
     ppo_agent.load(checkpoint_path)
